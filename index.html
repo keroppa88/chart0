@@ -5,211 +5,336 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>爆速225チャート</title>
   <style>
-    body { margin: 0; padding: 1rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; }
-    .container { max-width: 1400px; margin: 0 auto; background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-    .controls { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
-    select, input { padding: 6px 10px; border-radius: 4px; border: 1px solid #ccc; }
-    canvas { display: block; background: #fff; cursor: crosshair; touch-action: none; }
-    .chart-area { position: relative; border: 1px solid #eee; margin-bottom: 10px; }
-    #tooltip { position: absolute; pointer-events: none; padding: 8px; background: rgba(255,255,255,0.95); border: 1px solid #ccc; font-size: 12px; display: none; z-index: 100; box-shadow: 2px 2px 6px rgba(0,0,0,0.1); }
+    body { margin: 0; padding: 1rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f0f2f5; color: #1a1a1a; }
+    .container { max-width: 1400px; margin: 0 auto; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    
+    .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .controls { display: flex; gap: 15px; align-items: center; }
+    select, input { padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; font-size: 14px; }
+    
+    .chart-stack { display: flex; flex-direction: column; gap: 8px; }
+    .canvas-container { position: relative; border: 1px solid #eee; background: #fff; overflow: hidden; }
+    canvas { display: block; cursor: crosshair; touch-action: none; width: 100%; }
+    
+    .label-tag { position: absolute; top: 5px; left: 10px; font-size: 11px; font-weight: bold; color: #666; pointer-events: none; background: rgba(255,255,255,0.8); padding: 2px 5px; border-radius: 3px; }
+    #tooltip { position: absolute; pointer-events: none; padding: 10px; background: rgba(255,255,255,0.95); border: 1px solid #ccc; font-size: 12px; display: none; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 4px; line-height: 1.6; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <div class="title-row">
+  <div class="header-row">
     <div class="controls">
       <strong>銘柄:</strong>
       <select id="stockSelect" onchange="changeStock()"></select>
-      <span>表示本数:</span>
-      <input type="number" id="viewCount" value="100" min="20" max="500" style="width:60px;" onchange="updateViewCount()">
+      <strong>表示本数:</strong>
+      <input type="number" id="viewCountInput" value="100" min="20" max="1000" style="width:70px;" onchange="updateViewSettings()">
     </div>
-    <div id="infoDisplay" style="font-size: 14px; font-weight: bold; color: #555;"></div>
+    <div id="statusInfo" style="font-size: 13px; color: #666;"></div>
   </div>
 
-  <div class="chart-area">
-    <div id="tooltip"></div>
-    <canvas id="mainChart"></canvas>
+  <div class="chart-stack">
+    <div class="canvas-container" style="height: 400px;">
+      <span class="label-tag">PRICE / MA / VOLUME</span>
+      <canvas id="mainChart"></canvas>
+      <div id="tooltip"></div>
+    </div>
+    
+    <div class="canvas-container" style="height: 120px;">
+      <span class="label-tag">MACD (12, 26, 9)</span>
+      <canvas id="macdChart"></canvas>
+    </div>
+
+    <div class="canvas-container" style="height: 120px;">
+      <span class="label-tag">STOCHASTICS (14, 3, 3)</span>
+      <canvas id="stochChart"></canvas>
+    </div>
+
+    <div class="canvas-container" style="height: 120px;">
+      <span class="label-tag">RSI (14)</span>
+      <canvas id="rsiChart"></canvas>
+    </div>
   </div>
 </div>
 
 <script>
-/**
- * 設定とグローバル変数
+/** * グローバル状態管理 
  */
-let allStocksData = {}; // 全銘柄のデータを格納
+let allStocks = {}; // 銘柄ごとのOHLCV配列
 let currentCode = "";
-let dates = [];
-let ohlcv = []; // {open, high, low, close, volume}
-let viewCount = 100;
-let startIndex = 0;
+let ohlcv = []; // 現在表示中の全データ配列 {time, o, h, l, c, v}
+let indicators = {}; // 計算済みインジケータ
 
-const mainCanvas = document.getElementById('mainChart');
-const mainCtx = mainCanvas.getContext('2d');
-const tooltip = document.getElementById('tooltip');
+// 表示・インタラクション用
+let displayCount = 100;
+let startIndex = 0;
+let isDragging = false;
+let lastMouseX = 0;
+
+const canvases = {
+  main: { el: document.getElementById('mainChart'), ctx: document.getElementById('mainChart').getContext('2d') },
+  macd: { el: document.getElementById('macdChart'), ctx: document.getElementById('macdChart').getContext('2d') },
+  stoch: { el: document.getElementById('stochChart'), ctx: document.getElementById('stochChart').getContext('2d') },
+  rsi: { el: document.getElementById('rsiChart'), ctx: document.getElementById('rsiChart').getContext('2d') }
+};
 
 /**
- * 1. CSVデータの読み込みとパース (combined_long.csv専用)
+ * 1. データの自動読込 (combined_long.csv)
  */
-async function loadData() {
-  const el = document.getElementById('infoDisplay');
-  el.textContent = "データ読み込み中...";
+async function loadSystem() {
+  const info = document.getElementById('statusInfo');
+  info.textContent = "CSVデータを解析中...";
 
   try {
     const res = await fetch('combined_long.csv');
-    if (!res.ok) throw new Error("combined_long.csvが見つかりません");
+    if (!res.ok) throw new Error("combined_long.csv が見つかりません");
     const text = await res.text();
     const rows = text.trim().split('\n').slice(1);
 
-    const tempStore = {};
-
+    const temp = {};
     rows.forEach(row => {
       const [date, weekday, name, val] = row.split(',');
       if (!date || !name) return;
-
       const code = name.slice(0, 4);
       const type = name.slice(4);
-      const value = parseFloat(val);
+      const v = parseFloat(val);
 
-      if (!tempStore[code]) tempStore[code] = {};
-      if (!tempStore[code][date]) tempStore[code][date] = { date: date };
-
-      if (type === "始値") tempStore[code][date].open = value;
-      else if (type === "高値") tempStore[code][date].high = value;
-      else if (type === "安値") tempStore[code][date].low = value;
-      else if (type === "終値") tempStore[code][date].close = value;
-      else if (type === "出来高") tempStore[code][date].volume = value;
+      if (!temp[code]) temp[code] = {};
+      if (!temp[code][date]) temp[code][date] = { time: date };
+      
+      if (type === "始値") temp[code][date].o = v;
+      else if (type === "高値") temp[code][date].h = v;
+      else if (type === "安値") temp[code][date].l = v;
+      else if (type === "終値") temp[code][date].c = v;
+      else if (type === "出来高") temp[code][date].v = v;
     });
 
-    // 銘柄リストをプルダウンに反映
     const select = document.getElementById('stockSelect');
-    const codes = Object.keys(tempStore).sort();
+    const codes = Object.keys(temp).sort();
     codes.forEach(code => {
       const opt = document.createElement('option');
-      opt.value = code;
-      opt.textContent = code;
+      opt.value = code; opt.textContent = code;
       select.appendChild(opt);
-      
-      // データを配列形式に変換して保存
-      const sortedDates = Object.values(tempStore[code]).sort((a,b) => a.date.localeCompare(b.date));
-      allStocksData[code] = sortedDates;
+      allStocks[code] = Object.values(temp[code]).sort((a,b) => a.time.localeCompare(b.time));
     });
 
     currentCode = codes[0];
-    el.textContent = `全 ${codes.length} 銘柄 読込完了`;
-    initChart(currentCode);
+    info.textContent = `${codes.length} 銘柄の準備完了`;
+    initStock(currentCode);
 
   } catch (err) {
-    el.textContent = `エラー: ${err.message}`;
+    info.textContent = `読込失敗: ${err.message}`;
   }
 }
 
 /**
- * 2. チャートの初期化と描画
+ * 2. インジケータ計算ロジック
  */
-function initChart(code) {
-  const data = allStocksData[code];
-  dates = data.map(d => d.date);
-  ohlcv = data.map(d => ({
-    o: d.open, h: d.high, l: d.low, c: d.close, v: d.volume || 0
-  }));
-  
-  startIndex = Math.max(0, ohlcv.length - viewCount);
-  resizeCanvas();
+function computeAllIndicators() {
+  const close = ohlcv.map(d => d.c);
+  const high = ohlcv.map(d => d.h);
+  const low = ohlcv.map(d => d.l);
+
+  indicators = {
+    ma5: sma(close, 5),
+    ma25: sma(close, 25),
+    rsi: rsi(close, 14),
+    macd: macd(close, 12, 26, 9),
+    stoch: stoch(high, low, close, 14, 3, 3)
+  };
 }
 
-function resizeCanvas() {
-  const container = mainCanvas.parentElement;
-  mainCanvas.width = container.clientWidth;
-  mainCanvas.height = 500;
+// 指標計算用関数群
+function sma(data, p) {
+  return data.map((_, i) => {
+    if (i < p - 1) return null;
+    const slice = data.slice(i - p + 1, i + 1);
+    return slice.reduce((a, b) => a + b, 0) / p;
+  });
+}
+
+function rsi(data, p) {
+  let results = new Array(data.length).fill(null);
+  let ups = 0, downs = 0;
+  for (let i = 1; i < data.length; i++) {
+    const diff = data[i] - data[i-1];
+    ups += Math.max(0, diff);
+    downs += Math.max(0, -diff);
+    if (i >= p) {
+      if (i > p) {
+        ups -= Math.max(0, data[i-p] - data[i-p-1]);
+        downs -= Math.max(0, -(data[i-p] - data[i-p-1]));
+      }
+      results[i] = (ups / (ups + downs)) * 100;
+    }
+  }
+  return results;
+}
+
+function macd(data, s, l, sig) {
+  const ema = (d, p) => {
+    const k = 2 / (p + 1);
+    let res = [d[0]];
+    for (let i = 1; i < d.length; i++) res.push(d[i] * k + res[i-1] * (1 - k));
+    return res;
+  };
+  const fast = ema(data, s);
+  const slow = ema(data, l);
+  const diff = fast.map((v, i) => v - slow[i]);
+  const signal = ema(diff, sig);
+  return { diff, signal, hist: diff.map((v, i) => v - signal[i]) };
+}
+
+function stoch(h, l, c, pk, pd, ps) {
+  const kRaw = c.map((v, i) => {
+    if (i < pk) return null;
+    const hh = Math.max(...h.slice(i-pk+1, i+1));
+    const ll = Math.min(...l.slice(i-pk+1, i+1));
+    return ((v - ll) / (hh - ll)) * 100;
+  });
+  const k = sma(kRaw.filter(v => v !== null), pd);
+  const d = sma(k.filter(v => v !== null), ps);
+  return { k: new Array(pk+pd-2).fill(null).concat(k), d: new Array(pk+pd+ps-3).fill(null).concat(d) };
+}
+
+/**
+ * 3. 描画エンジン
+ */
+function draw() {
+  if (!ohlcv.length) return;
+  const end = Math.min(startIndex + displayCount, ohlcv.length);
+  const visible = ohlcv.slice(startIndex, end);
+  const vInd = Object.keys(indicators).reduce((acc, key) => {
+    if (key === 'macd' || key === 'stoch') {
+      acc[key] = { 
+        ...Object.keys(indicators[key]).reduce((a, k) => { a[k] = indicators[key][k].slice(startIndex, end); return a; }, {}) 
+      };
+    } else {
+      acc[key] = indicators[key].slice(startIndex, end);
+    }
+    return acc;
+  }, {});
+
+  // 各Canvasのクリアとリサイズ
+  Object.values(canvases).forEach(c => {
+    c.el.width = c.el.parentElement.clientWidth;
+    c.el.height = c.el.parentElement.clientHeight;
+    c.ctx.clearRect(0, 0, c.el.width, c.el.height);
+  });
+
+  const w = canvases.main.el.width - 60;
+  const getX = (i) => (i / displayCount) * w + (w / displayCount / 2);
+
+  /** メインチャート描画 **/
+  const main = canvases.main;
+  const maxP = Math.max(...visible.map(d => d.h)) * 1.01;
+  const minP = Math.min(...visible.map(d => d.l)) * 0.99;
+  const getY = (p) => main.el.height - 30 - ((p - minP) / (maxP - minP)) * (main.el.height - 50);
+
+  // 出来高
+  const maxV = Math.max(...visible.map(d => d.v));
+  visible.forEach((d, i) => {
+    const vH = (d.v / maxV) * 60;
+    main.ctx.fillStyle = d.c >= d.o ? 'rgba(239, 83, 80, 0.15)' : 'rgba(38, 166, 154, 0.15)';
+    main.ctx.fillRect((i/displayCount)*w, main.el.height - 30 - vH, (w/displayCount)*0.8, vH);
+  });
+
+  // 移動平均線
+  const drawLine = (ctx, data, color) => {
+    ctx.strokeStyle = color; ctx.beginPath();
+    data.forEach((p, i) => { if (p) ctx[i===0 ? 'moveTo' : 'lineTo'](getX(i), getY(p)); });
+    ctx.stroke();
+  };
+  drawLine(main.ctx, vInd.ma5, "#ff9800");
+  drawLine(main.ctx, vInd.ma25, "#2196f3");
+
+  // ローソク足
+  visible.forEach((d, i) => {
+    const x = getX(i); const bw = (w / displayCount) * 0.7;
+    main.ctx.strokeStyle = d.c >= d.o ? "#ef5350" : "#26a69a";
+    main.ctx.fillStyle = main.ctx.strokeStyle;
+    main.ctx.beginPath(); main.ctx.moveTo(x, getY(d.h)); main.ctx.lineTo(x, getY(d.l)); main.ctx.stroke();
+    const yO = getY(d.o), yC = getY(d.c);
+    main.ctx.fillRect(x - bw/2, Math.min(yO, yC), bw, Math.max(1, Math.abs(yO - yC)));
+  });
+
+  /** 指標描画 (MACD / STOCH / RSI) **/
+  const drawIndicator = (cvs, dataObj, colors, range = [0, 100]) => {
+    const ctx = cvs.ctx; const h = cvs.el.height - 20;
+    const getIY = (v) => h - ((v - range[0]) / (range[1] - range[0])) * h + 10;
+    
+    Object.keys(dataObj).forEach((k, idx) => {
+      ctx.strokeStyle = colors[idx]; ctx.beginPath();
+      dataObj[k].forEach((v, i) => { if (v !== null) ctx[i===0 ? 'moveTo' : 'lineTo'](getX(i), getIY(v)); });
+      ctx.stroke();
+    });
+  };
+
+  // MACD
+  const mRange = Math.max(...vInd.macd.diff.filter(v => v!==null).map(Math.abs)) * 1.2;
+  drawIndicator(canvases.macd, {d:vInd.macd.diff, s:vInd.macd.signal}, ["#2196f3", "#ff9800"], [-mRange, mRange]);
+  
+  // Stoch
+  drawIndicator(canvases.stoch, {k:vInd.stoch.k, d:vInd.stoch.d}, ["#4caf50", "#e91e63"], [0, 100]);
+  
+  // RSI
+  drawIndicator(canvases.rsi, {r:vInd.rsi}, ["#9c27b0"], [0, 100]);
+
+  // 日付ラベル
+  main.ctx.fillStyle = "#999"; main.ctx.fillText(visible[0].time, 5, main.el.height - 5);
+  main.ctx.fillText(visible[visible.length-1].time, w - 80, main.el.height - 5);
+}
+
+/**
+ * 4. インタラクション (ズーム・スクロール)
+ */
+function initStock(code) {
+  ohlcv = allStocks[code];
+  computeAllIndicators();
+  startIndex = Math.max(0, ohlcv.length - displayCount);
   draw();
 }
 
-function draw() {
-  if (ohlcv.length === 0) return;
-
-  const ctx = mainCtx;
-  const w = mainCanvas.width;
-  const h = mainCanvas.height;
-  const chartW = w - 60; // 右側に価格ラベル用余白
-  const chartH = h - 30; // 下側に日付ラベル用余白
-
-  ctx.clearRect(0, 0, w, h);
-
-  // 表示範囲のデータ
-  const visible = ohlcv.slice(startIndex, startIndex + viewCount);
-  const maxPrice = Math.max(...visible.map(d => d.h)) * 1.02;
-  const minPrice = Math.min(...visible.map(d => d.l)) * 0.98;
-  const maxVol = Math.max(...visible.map(d => d.v));
-
-  const getX = (i) => (i / viewCount) * chartW + (chartW / viewCount / 2);
-  const getY = (p) => chartH - ((p - minPrice) / (maxPrice - minPrice)) * chartH;
-
-  // 出来高の描画（背景的に薄く表示）
-  visible.forEach((d, i) => {
-    const x = (i / viewCount) * chartW;
-    const barW = (chartW / viewCount) * 0.8;
-    const barH = (d.v / maxVol) * (chartH * 0.2); // 高さの20%を使用
-    ctx.fillStyle = d.c >= d.o ? 'rgba(239, 83, 80, 0.2)' : 'rgba(38, 166, 154, 0.2)';
-    ctx.fillRect(x + (chartW/viewCount*0.1), chartH - barH, barW, barH);
-  });
-
-  // グリッド線とラベル
-  ctx.strokeStyle = "#eee";
-  ctx.beginPath();
-  for(let j=0; j<=5; j++) {
-    const p = minPrice + (maxPrice - minPrice) * (j/5);
-    const y = getY(p);
-    ctx.moveTo(0, y); ctx.lineTo(chartW, y);
-    ctx.fillStyle = "#999"; ctx.fillText(p.toFixed(0), chartW + 5, y + 4);
-  }
-  ctx.stroke();
-
-  // ローソク足の描画
-  visible.forEach((d, i) => {
-    const x = getX(i);
-    const bw = (chartW / viewCount) * 0.7;
-    
-    ctx.strokeStyle = d.c >= d.o ? "#ef5350" : "#26a69a";
-    ctx.fillStyle = ctx.strokeStyle;
-
-    // ヒゲ
-    ctx.beginPath();
-    ctx.moveTo(x, getY(d.h)); ctx.lineTo(x, getY(d.l));
-    ctx.stroke();
-
-    // 実体
-    const yOpen = getY(d.o);
-    const yClose = getY(d.c);
-    ctx.fillRect(x - bw/2, Math.min(yOpen, yClose), bw, Math.max(1, Math.abs(yOpen - yClose)));
-  });
-
-  // 軸の日付表示
-  ctx.fillStyle = "#666";
-  ctx.fillText(dates[startIndex], 5, h - 5);
-  ctx.fillText(dates[startIndex + visible.length - 1], chartW - 70, h - 5);
-}
-
-/**
- * 3. ユーティリティ
- */
 function changeStock() {
   currentCode = document.getElementById('stockSelect').value;
-  initChart(currentCode);
+  initStock(currentCode);
 }
 
-function updateViewCount() {
-  viewCount = parseInt(document.getElementById('viewCount').value);
-  startIndex = Math.max(0, ohlcv.length - viewCount);
+function updateViewSettings() {
+  displayCount = parseInt(document.getElementById('viewCountInput').value);
+  startIndex = Math.max(0, ohlcv.length - displayCount);
   draw();
 }
 
-// 初期化
-window.addEventListener('resize', resizeCanvas);
-loadData();
+// マウスホイールでのズーム
+window.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 5 : -5;
+  displayCount = Math.min(Math.max(20, displayCount + delta), 1000);
+  startIndex = Math.min(Math.max(0, startIndex - delta), ohlcv.length - displayCount);
+  draw();
+}, { passive: false });
+
+// ドラッグでのスクロール
+window.addEventListener('mousedown', (e) => { isDragging = true; lastMouseX = e.clientX; });
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const moveX = e.clientX - lastMouseX;
+  if (Math.abs(moveX) > 5) {
+    const shift = Math.round((moveX / canvases.main.el.width) * displayCount);
+    startIndex = Math.min(Math.max(0, startIndex - shift), ohlcv.length - displayCount);
+    lastMouseX = e.clientX;
+    draw();
+  }
+});
+window.addEventListener('mouseup', () => isDragging = false);
+
+// リサイズ対応
+window.addEventListener('resize', draw);
+
+// 開始
+loadSystem();
 
 </script>
 </body>
 </html>
-
