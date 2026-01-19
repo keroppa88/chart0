@@ -103,7 +103,7 @@
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
     <div class="legend-item" style="margin-left:auto;">
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="rightSpaceCheck" checked>
+        <input type="checkbox" id="rightSpaceCheck">
         <span>右スペース</span>
       </label>
     </div>
@@ -244,7 +244,7 @@ function restoreBackBuffers(){
    現在選択中の銘柄情報
 ========================= */
 let currentSymbolDisplay = "";
-let rightSpaceEnabled = true; // 右スペースを追加するかどうか
+let rightSpaceEnabled = false; // 右スペースを追加するかどうか（デフォルトはOFF）
 
 /* =========================
    Parsing (TSV/CSV)
