@@ -53,7 +53,7 @@
 
 <div class="container">
   <div class="title-row">
-    <h1>爆速チャートくん</h1>
+    <h1>爆速チャートくん225</h1>
     <button id="helpBtn" class="help-btn" type="button">使い方</button>
   </div>
 
@@ -101,9 +101,6 @@
     <div class="legend-item"><div class="legend-color" style="background:#333"></div><span id="priceLegend">終値（折れ線）</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
-    <div class="legend-item"><div class="legend-color" style="background:#9c27b0"></div>RSI</div>
-    <div class="legend-item"><div class="legend-color" style="background:#00bcd4"></div>%K</div>
-    <div class="legend-item"><div class="legend-color" style="background:#ff5722"></div>%D</div>
   </div>
 
   <canvas id="mainChart"></canvas>
@@ -169,12 +166,10 @@
     </div>
     <div class="modal-body">
 - 平日18時頃に自動更新。
+- 銘柄選択は左右矢印で高速切り替え、ホイール拡大縮小、ドラッグ左右移動
 - 最初に全データを読み込むことで爆速表示を実現！静的サイトなのに銘柄切り替えが可能。
-- テクニカル指標は表示・非表示・場所入れ替えが可能。
-- データはJPXAPI。
-
-注意:
-- file:// 直開きだと fetch がブロックされることがあります。http-server 等で http://127.0.0.1:8000/ から開いてください。
+- テクニカル指標は表示・非表示・場所入れ替えが可能。数値変更で動的描写。
+- JPXAPI→個別CSV→ロングCSVにまとめ→HTMLブラウザアプリで表示。
     </div>
   </div>
 </div>
@@ -1347,5 +1342,6 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
