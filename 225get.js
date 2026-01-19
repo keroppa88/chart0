@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // 設定項目
-const API_KEY = "oUB089Am_3qKFu97x7Qh6AvCkIRA3HfsKbG4iTLQCVM"; // ダッシュボードから発行したキーを入力
+const API_KEY = process.env.JQUANTS_API_KEY; // GitHubのSecretsから読み込む
 const API_URL = "https://api.jquants.com/v2";
 const DATA_DIR = path.join(__dirname, 'public/data');
 const TARGET_STOCKS = ["1332","1605","1721","1801","1802","1803","1808","1812","1925","1928","1963","2002","2269",
@@ -95,5 +95,6 @@ async function main() {
     }
     console.log("すべての処理が完了しました。");
 }
+
 
 main();
