@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>株価チャート（自動読込・ロング形式・ホイール可変・ドラッグ移動）</title>
+  <title>225爆速チャートくん</title>
   <style>
     body { margin: 0; padding: 1rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; }
     .container { max-width: 1200px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -35,15 +35,15 @@
     canvas { display:block; width:100%; cursor:crosshair; }
     #mainChart { height:350px; border:1px solid #ddd; border-bottom:none; position:relative; }
 
-    .indicator-container { border:1px solid #ddd; border-top:none; background:#fff; position:relative; }
+    .indicator-container { border:1px solid #ddd; border-top:none; background:#fff; position:relative; min-height:24px; }
     .indicator-controls { position:absolute; top:2px; right:2px; pointer-events:auto; display:flex; gap:2px; z-index:10; }
     .btn-icon { width:16px; height:16px; border:none; color:#fff; font-size:10px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:2px; opacity:0.7; }
     .btn-icon:hover { opacity:1; }
     .btn-move { background:#2196f3; }
     .btn-toggle { background:#666; }
+    .btn-expand { background:#4caf50; }
     .indicator-wrapper { height:120px; transition:height 0.2s; overflow:hidden; }
     .indicator-wrapper.collapsed { height:0; }
-    .indicator-wrapper.volume { height:60px; }
     .indicator-canvas { height:100%; width:100%; }
 
     .tooltip { position:absolute; background:rgba(255,255,255,0.95); border:1px solid #999; padding:8px; border-radius:4px; font-size:12px; pointer-events:none; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:100; line-height:1.4; white-space:nowrap; }
@@ -88,7 +88,7 @@
 
   <div class="controls-row">
     <span class="hint" id="viewInfo">表示本数: - / 表示範囲: -</span>
-    <span class="hint" style="margin-left:auto;">ホイール: 前=縮める(−1) / 後=広げる(+1) ・ ドラッグ: 左右に移動</span>
+    <span class="hint" style="margin-left:auto;">銘柄選択は左右矢印で高速切り替え、ホイール拡大縮小、ドラッグ左右移動</span>
   </div>
 
   <div class="controls-row">
@@ -118,9 +118,10 @@
       <div class="indicator-controls">
         <button class="btn-icon btn-move" onclick="moveIndicator('volume','up')">▲</button>
         <button class="btn-icon btn-move" onclick="moveIndicator('volume','down')">▼</button>
-        <button class="btn-icon btn-toggle" onclick="toggleIndicator('volume')">−</button>
+        <button class="btn-icon btn-toggle" onclick="toggleIndicator('volume')" id="volumeCollapseBtn">−</button>
+        <button class="btn-icon btn-expand" onclick="toggleIndicator('volume')" id="volumeExpandBtn" style="display:none;">+</button>
       </div>
-      <div class="indicator-wrapper volume" id="volumeWrapper">
+      <div class="indicator-wrapper" id="volumeWrapper">
         <canvas class="indicator-canvas" id="volumeChart"></canvas>
       </div>
     </div>
@@ -129,7 +130,8 @@
       <div class="indicator-controls">
         <button class="btn-icon btn-move" onclick="moveIndicator('macd','up')">▲</button>
         <button class="btn-icon btn-move" onclick="moveIndicator('macd','down')">▼</button>
-        <button class="btn-icon btn-toggle" onclick="toggleIndicator('macd')">−</button>
+        <button class="btn-icon btn-toggle" onclick="toggleIndicator('macd')" id="macdCollapseBtn">−</button>
+        <button class="btn-icon btn-expand" onclick="toggleIndicator('macd')" id="macdExpandBtn" style="display:none;">+</button>
       </div>
       <div class="indicator-wrapper" id="macdWrapper">
         <canvas class="indicator-canvas" id="macdChart"></canvas>
@@ -140,7 +142,8 @@
       <div class="indicator-controls">
         <button class="btn-icon btn-move" onclick="moveIndicator('stoch','up')">▲</button>
         <button class="btn-icon btn-move" onclick="moveIndicator('stoch','down')">▼</button>
-        <button class="btn-icon btn-toggle" onclick="toggleIndicator('stoch')">−</button>
+        <button class="btn-icon btn-toggle" onclick="toggleIndicator('stoch')" id="stochCollapseBtn">−</button>
+        <button class="btn-icon btn-expand" onclick="toggleIndicator('stoch')" id="stochExpandBtn" style="display:none;">+</button>
       </div>
       <div class="indicator-wrapper" id="stochWrapper">
         <canvas class="indicator-canvas" id="stochChart"></canvas>
@@ -151,7 +154,8 @@
       <div class="indicator-controls">
         <button class="btn-icon btn-move" onclick="moveIndicator('rsi','up')">▲</button>
         <button class="btn-icon btn-move" onclick="moveIndicator('rsi','down')">▼</button>
-        <button class="btn-icon btn-toggle" onclick="toggleIndicator('rsi')">−</button>
+        <button class="btn-icon btn-toggle" onclick="toggleIndicator('rsi')" id="rsiCollapseBtn">−</button>
+        <button class="btn-icon btn-expand" onclick="toggleIndicator('rsi')" id="rsiExpandBtn" style="display:none;">+</button>
       </div>
       <div class="indicator-wrapper" id="rsiWrapper">
         <canvas class="indicator-canvas" id="rsiChart"></canvas>
@@ -169,12 +173,10 @@
       <button id="helpCloseBtn" class="modal-close" type="button">閉じる</button>
     </div>
     <div class="modal-body">
-- 同一フォルダの「combined_long.csv」を起動時に自動読込します（タブ/カンマ自動判定）。
-- （任意）同一フォルダの「chartlist.csv」があれば、プルダウン銘柄をその順序・銘柄に限定します（1列=銘柄名、または value,label の2列）。
-- ロング形式: 日付 / 曜日 / 日種類 / 商品名 / 数値
-- マウスホイール: 1日単位で可変（前に回す=表示日数を縮める / 後ろに回す=表示日数を広げる）
-- ドラッグ: 表示範囲を左右に移動（最新から過去へ）
-- データが足りない分は左側を空白（null）表示
+- 平日18時頃に自動更新。
+- 最初に全データを読み込むことで爆速表示を実現！静的サイトなのに銘柄切り替えが可能。
+- テクニカル指標は表示・非表示・場所入れ替えが可能。
+- データはJPXAPI。
 
 注意:
 - file:// 直開きだと fetch がブロックされることがあります。http-server 等で http://127.0.0.1:8000/ から開いてください。
@@ -1217,8 +1219,18 @@ function onMouseLeave(){
 function toggleIndicator(key){
   collapsed[key]=!collapsed[key];
   const wrapper=document.getElementById(key+'Wrapper');
-  if(collapsed[key]) wrapper.classList.add('collapsed');
-  else wrapper.classList.remove('collapsed');
+  const collapseBtn=document.getElementById(key+'CollapseBtn');
+  const expandBtn=document.getElementById(key+'ExpandBtn');
+  
+  if(collapsed[key]) {
+    wrapper.classList.add('collapsed');
+    collapseBtn.style.display='none';
+    expandBtn.style.display='flex';
+  } else {
+    wrapper.classList.remove('collapsed');
+    collapseBtn.style.display='flex';
+    expandBtn.style.display='none';
+  }
   setTimeout(resizeCanvas, 210);
 }
 function moveIndicator(key, dir){
