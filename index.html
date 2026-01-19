@@ -53,7 +53,7 @@
 
 <div class="container">
   <div class="title-row">
-    <h1>株価チャート</h1>
+    <h1>爆速チャートくん</h1>
     <button id="helpBtn" class="help-btn" type="button">使い方</button>
   </div>
 
@@ -61,17 +61,12 @@
     <div class="param-group">
       <label>銘柄</label>
       <select id="symbolSelect">
-        <option value="日経平均終値">日経平均終値</option>
-        <option value="TOPIX終値">TOPIX終値</option>
-        <option value="日経内需50">日経内需50</option>
-        <option value="日経外需50">日経外需50</option>
-        <option value="日経半導体株指数">日経半導体株指数</option>
-        <option value="東証大型">東証大型</option>
+        <option value="">読み込み中...</option>
       </select>
     </div>
 
     <div class="param-group">
-      <label>クイック</label>
+      <label>期間切替</label>
       <select id="quickSelect" title="表示本数を即変更">
         <option value="">-</option>
         <option value="20">20</option>
@@ -1343,3 +1338,4 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
