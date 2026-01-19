@@ -101,9 +101,6 @@
     <div class="legend-item"><div class="legend-color" style="background:#333"></div><span>価格（ローソク足）</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
-    <div class="legend-item"><div class="legend-color" style="background:#9c27b0"></div>RSI</div>
-    <div class="legend-item"><div class="legend-color" style="background:#00bcd4"></div>%K</div>
-    <div class="legend-item"><div class="legend-color" style="background:#ff5722"></div>%D</div>
     <div class="legend-item" style="margin-left:auto;">
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
         <input type="checkbox" id="rightSpaceCheck">
@@ -175,12 +172,11 @@
     </div>
     <div class="modal-body">
 - 平日18時頃に自動更新。
-- 銘柄選択は左右矢印で高速切り替え、ホイール拡大縮小、ドラッグ左右移動
-- 銘柄選択は矢印ボタンで高速切り替え。左右＝1ずつ、上下＝10ずつ。
+- 銘柄選択は左右矢印で高速切り替え、左右＝1ずつ、上下＝10ずつ。
 - ホイール拡大縮小、ドラッグ左右移動
 - 最初に全データを読み込むことで爆速表示を実現！静的サイトなのに銘柄切り替えが可能。
 - テクニカル指標は表示・非表示・場所入れ替えが可能。数値変更で動的描写。
-- JPXAPI→個別CSV→ロングCSVにまとめ→HTMLブラウザアプリで表示。
+- JPXAPI→個別CSV→ロングCSVにまとめ→HTMLブラウザアプリで表示。    
     </div>
   </div>
 </div>
@@ -1393,3 +1389,4 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
