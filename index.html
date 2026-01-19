@@ -1264,7 +1264,34 @@ function setupEventListeners(){
   helpModal.addEventListener('click', (e)=>{ if(e.target===helpModal) closeHelp(); });
   window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && helpModal.style.display==='flex') closeHelp(); });
 
-  document.getElementById('symbolSelect')?.addEventListener('change', ()=>applySymbol());
+document.getElementById('symbolSelect')?.addEventListener('change', ()=>applySymbol());
+
+// 銘柄選択で矢印キー操作
+document.getElementById('symbolSelect')?.addEventListener('keydown', (e)=>{
+  const sel = e.target;
+  const currentIndex = sel.selectedIndex;
+  const maxIndex = sel.options.length - 1;
+  let newIndex = currentIndex;
+
+  if(e.key === 'ArrowRight') {
+    e.preventDefault();
+    newIndex = Math.min(currentIndex + 1, maxIndex);
+  } else if(e.key === 'ArrowLeft') {
+    e.preventDefault();
+    newIndex = Math.max(currentIndex - 1, 0);
+  } else if(e.key === 'ArrowDown') {
+    e.preventDefault();
+    newIndex = Math.min(currentIndex + 10, maxIndex);
+  } else if(e.key === 'ArrowUp') {
+    e.preventDefault();
+    newIndex = Math.max(currentIndex - 10, 0);
+  }
+
+  if(newIndex !== currentIndex) {
+    sel.selectedIndex = newIndex;
+    applySymbol();
+  }
+});
 
   document.getElementById('quickSelect')?.addEventListener('change', (e)=>{
     const v = e.target.value;
@@ -1339,6 +1366,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
