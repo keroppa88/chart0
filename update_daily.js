@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // 設定項目
-const API_KEY = "oUB089Am_3qKFu97x7Qh6AvCkIRA3HfsKbG4iTLQCVM";
+const API_KEY = process.env.JQUANTS_API_KEY; // GitHubのSecretsから読み込む
 const API_URL = "https://api.jquants.com/v2";
 const DATA_DIR = path.join(__dirname, 'data');
 
@@ -56,5 +56,6 @@ async function appendDailyData(code) {
         console.error(`❌ ${code} エラー:`, e.message);
     }
 }
+
 
 updateAllStocks();
