@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>225チャート爆速くん</title>
+  <title>株価チャート（自動読込・ロング形式・ホイール可変・ドラッグ移動）</title>
   <style>
     body { margin: 0; padding: 1rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; }
     .container { max-width: 1200px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -59,14 +59,12 @@
   <div class="controls-row" style="margin-top:15px;">
     <div class="param-group">
       <label>銘柄</label>
-      <select id="symbolSelect">
-        <option value="">-</option>
-      </select>
+      <select id="symbolSelect"></select>
     </div>
 
     <div class="param-group">
       <label>クイック</label>
-      <select id="quickSelect" title="表示本数を即変更">
+      <select id="quickSelect">
         <option value="">-</option>
         <option value="20">20</option>
         <option value="100" selected>100</option>
@@ -96,7 +94,7 @@
   </div>
 
   <div class="legend">
-    <div class="legend-item"><div class="legend-color" style="background:#333"></div><span id="priceLegend">終値（折れ線）</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:#333"></div><span id="priceLegend">価格</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
     <div class="legend-item"><div class="legend-color" style="background:#9c27b0"></div>RSI</div>
@@ -117,7 +115,6 @@
         <canvas class="indicator-canvas" id="macdChart"></canvas>
       </div>
     </div>
-
     <div class="indicator-container" id="stochContainer">
       <div class="indicator-controls">
         <button class="btn-icon btn-move" onclick="moveIndicator('stoch','up')">▲</button>
@@ -128,7 +125,6 @@
         <canvas class="indicator-canvas" id="stochChart"></canvas>
       </div>
     </div>
-
     <div class="indicator-container" id="rsiContainer">
       <div class="indicator-controls">
         <button class="btn-icon btn-move" onclick="moveIndicator('rsi','up')">▲</button>
@@ -144,17 +140,16 @@
   <div id="tooltip" class="tooltip"></div>
 </div>
 
-<div id="helpModal" class="modal-overlay" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
+<div id="helpModal" class="modal-overlay">
+  <div class="modal">
     <div class="modal-header">
-      <p class="modal-title" id="helpModalTitle">使い方</p>
-      <button id="helpCloseBtn" class="modal-close" type="button">閉じる</button>
+      <p class="modal-title">使い方</p>
+      <button id="helpCloseBtn" class="modal-close">閉じる</button>
     </div>
     <div class="modal-body">
-- 最初に日経225銘柄の日足四本値を全て読み込む。平日18時頃に自動更新。
-- 銘柄コード欄にマウスを合わせて左右矢印ボタンで銘柄爆速切り替え。
-- マウスホイールでチャート拡大縮小など。
-- テクニカル指標の位置変更が可能。数字変更で動的に指標描画が変更。
+- combined_long.csv を読み込みます。UTF-8形式を推奨。
+- chartlist.csv があれば銘柄を限定します。
+- ホイール: ズーム / ドラッグ: 移動
     </div>
   </div>
 </div>
@@ -165,53 +160,17 @@ let chartListItems = null;
 let series = [];
 let displayCount = 100;
 let offsetX = 0;
-
 let isDragging = false;
 let dragStartX = 0;
 let dragStartOffset = 0;
 
-let params = {
-  ma1: 20, ma2: 60,
-  rsi: 14,
-  stochK: 14, stochD: 3,
-  macdShort: 12, macdLong: 26, macdSignal: 9
-};
-
-let mainCanvas, mainCtx;
-let macdCanvas, macdCtx;
-let stochCanvas, stochCtx;
-let rsiCanvas, rsiCtx;
-let tooltip;
-
+let params = { ma1: 20, ma2: 60, rsi: 14, stochK: 14, stochD: 3, macdShort: 12, macdLong: 26, macdSignal: 9 };
+let mainCanvas, mainCtx, macdCanvas, macdCtx, stochCanvas, stochCtx, rsiCanvas, rsiCtx, tooltip;
 let collapsed = { macd: false, stoch: false, rsi: false };
-
-let indicators = {
-  ma1: [], ma2: [],
-  rsi: [],
-  stoch: { k: [], d: [] },
-  macd: { macd: [], signal: [], hist: [] }
-};
-
+let indicators = { ma1: [], ma2: [], rsi: [], stoch: { k: [], d: [] }, macd: { macd: [], signal: [], hist: [] } };
 let backBuffers = { main: null, macd: null, stoch: null, rsi: null };
-function resetBackBuffers(){ backBuffers.main = backBuffers.macd = backBuffers.stoch = backBuffers.rsi = null; }
-function saveBackBuffers(){
-  try{
-    backBuffers.main = mainCtx.getImageData(0,0,mainCanvas.width, mainCanvas.height);
-    backBuffers.macd = (!collapsed.macd) ? macdCtx.getImageData(0,0,macdCanvas.width, macdCanvas.height) : null;
-    backBuffers.stoch = (!collapsed.stoch) ? stochCtx.getImageData(0,0,stochCanvas.width, stochCanvas.height) : null;
-    backBuffers.rsi = (!collapsed.rsi) ? rsiCtx.getImageData(0,0,rsiCanvas.width, rsiCanvas.height) : null;
-  }catch(e){}
-}
-function restoreBackBuffers(){
-  try{
-    if(backBuffers.main) mainCtx.putImageData(backBuffers.main,0,0);
-    if(!collapsed.macd && backBuffers.macd) macdCtx.putImageData(backBuffers.macd,0,0);
-    if(!collapsed.stoch && backBuffers.stoch) stochCtx.putImageData(backBuffers.stoch,0,0);
-    if(!collapsed.rsi && backBuffers.rsi) rsiCtx.putImageData(backBuffers.rsi,0,0);
-  }catch(e){}
-}
 
-function toNum(s){ if(s==null) return NaN; return Number(String(s).replace(/,/g,'').replace(/"/g,'').trim()); }
+function toNum(s){ return Number(String(s||"").replace(/,/g,'').replace(/"/g,'').trim()); }
 function parseDelimitedLine(line, delim){
   const out=[]; let cur=""; let inQ=false;
   for(const ch of line){
@@ -219,477 +178,158 @@ function parseDelimitedLine(line, delim){
     if(ch===delim && !inQ){ out.push(cur); cur=""; }
     else cur+=ch;
   }
-  out.push(cur);
-  return out;
+  out.push(cur); return out;
 }
 function detectDelimiter(headerLine){
-  const tabCount=(headerLine.match(/\t/g)||[]).length;
-  const commaCount=(headerLine.match(/,/g)||[]).length;
-  return tabCount>=commaCount ? "\t" : ",";
+  return (headerLine.match(/\t/g)||[]).length >= (headerLine.match(/,/g)||[]).length ? "\t" : ",";
 }
 function parseLongFormat(text){
   const lines=text.trim().split(/\r?\n/);
-  if(lines.length<2) throw new Error("データが空です");
   const delim=detectDelimiter(lines[0]);
-  const header=parseDelimitedLine(lines[0],delim).map(s=>s.replace(/\r/g,'').trim());
-
-  const idxDate=header.indexOf("日付");
-  const idxName=header.indexOf("商品名");
-  const idxVal=header.indexOf("数値");
-  if(idxDate<0||idxName<0||idxVal<0) throw new Error("必須列(日付, 商品名, 数値)が見つかりません");
-
+  const header=parseDelimitedLine(lines[0],delim).map(s=>s.trim());
+  const iD=header.indexOf("日付"), iN=header.indexOf("商品名"), iV=header.indexOf("数値");
   const rows=[];
   for(let i=1;i<lines.length;i++){
     const cols=parseDelimitedLine(lines[i],delim);
-    if(!cols || cols.length===0) continue;
-    const date=(cols[idxDate]||"").trim();
-    const name=(cols[idxName]||"").trim();
-    const value=toNum(cols[idxVal]);
-    if(!date || !name || Number.isNaN(value)) continue;
-    rows.push({date, name, value});
+    if(cols.length<3) continue;
+    rows.push({date:cols[iD].trim(), name:cols[iN].trim(), value:toNum(cols[iV])});
   }
   return rows;
 }
-
 function parseChartList(text){
-  const raw = String(text||"").replace(/\uFEFF/g,'').trim();
-  if(!raw) return [];
-  const lines = raw.split(/\r?\n/).map(s=>s.trim()).filter(s=>s && !s.startsWith('#'));
-  if(lines.length===0) return [];
-
-  const delim = detectDelimiter(lines[0]);
-  const out=[];
-  for(let i=0;i<lines.length;i++){
-    const cols = parseDelimitedLine(lines[i], delim).map(s=>s.trim());
-    if(!cols || cols.length===0) continue;
-    const value = cols[0];
-    const label = cols[1] || value;
-    out.push({value, label});
-  }
-  return out;
+  const lines=text.trim().split(/\r?\n/).filter(s=>s&&!s.startsWith('#'));
+  const delim=detectDelimiter(lines[0]||"");
+  return lines.map(l=>{
+    const c=parseDelimitedLine(l, delim).map(s=>s.trim());
+    return {value:c[0], label:c[1]||c[0]};
+  });
 }
 
 const OHLC_FIELDS = ["始値","高値","安値","終値"];
 const OHLC_RE = /(始値|高値|安値|終値)$/;
-
 let chartMode = "line";
 let symbolMeta = null;
 
 function splitOhlcName(name){
   const m = String(name||"").match(OHLC_RE);
-  if(!m) return { base: String(name||""), field: null };
-  return { base: String(name||"").slice(0, -m[1].length), field: m[1] };
+  return m ? { base: name.slice(0, -m[1].length), field: m[1] } : { base: name, field: null };
 }
-
 function buildSymbolMeta(rows){
-  const allNames = new Set();
-  const baseToFields = new Map();
-  for(const r of rows || []){
-    if(!r || !r.name) continue;
-    allNames.add(r.name);
-    const sp = splitOhlcName(r.name);
-    if(sp.field){
-      if(!baseToFields.has(sp.base)) baseToFields.set(sp.base, new Set());
-      baseToFields.get(sp.base).add(sp.field);
-    }
-  }
-  const candleBaseSet = new Set();
-  for(const [base, fields] of baseToFields.entries()){
-    if(OHLC_FIELDS.every(f => fields.has(f))) candleBaseSet.add(base);
-  }
-  return { allNames, candleBaseSet, baseToFields };
+  const allNames = new Set(); const b2f = new Map();
+  rows.forEach(r=>{
+    allNames.add(r.name); const sp=splitOhlcName(r.name);
+    if(sp.field){ if(!b2f.has(sp.base)) b2f.set(sp.base, new Set()); b2f.get(sp.base).add(sp.field); }
+  });
+  const cbs = new Set(); b2f.forEach((f,b)=>{ if(OHLC_FIELDS.every(x=>f.has(x))) cbs.add(b); });
+  return { allNames, candleBaseSet: cbs };
 }
 
 function populateSymbolSelect(){
   const sel = document.getElementById('symbolSelect');
-  if(!sel) return;
-
   const current = sel.value;
   if(!symbolMeta) symbolMeta = buildSymbolMeta(longRows);
-
   sel.innerHTML = "";
-
-  if(Array.isArray(chartListItems) && chartListItems.length > 0){
-    for(const item of chartListItems){
+  if(chartListItems){
+    chartListItems.forEach(item=>{
       const opt = document.createElement('option');
-      opt.value = item.value;
-      // 9984,ソフバン の形式で表示
-      opt.textContent = item.value + (item.label !== item.value ? "," + item.label : "");
+      opt.value = item.value; opt.textContent = item.value + (item.label!==item.value ? ","+item.label : "");
       sel.appendChild(opt);
-    }
+    });
   } else {
-    const candleBases = Array.from(symbolMeta.candleBaseSet).sort();
-    const names = Array.from(symbolMeta.allNames).sort();
-    for(const b of candleBases){
-      const opt = document.createElement('option');
-      opt.value = b; opt.textContent = b;
-      sel.appendChild(opt);
-    }
-    for(const n of names){
-      const opt = document.createElement('option');
-      opt.value = n; opt.textContent = n;
-      sel.appendChild(opt);
-    }
+    symbolMeta.candleBaseSet.forEach(b=>{ const o=document.createElement('option'); o.value=o.textContent=b; sel.appendChild(o); });
+    symbolMeta.allNames.forEach(n=>{ if(!splitOhlcName(n).field){ const o=document.createElement('option'); o.value=o.textContent=n; sel.appendChild(o); }});
   }
-
-  if(current && Array.from(sel.options).some(o=>o.value===current)) sel.value = current;
+  if(current) sel.value = current;
 }
 
-function buildLineSeriesFromLong(rows, targetName){
-  const map=new Map();
-  for(const r of rows) if(r.name===targetName) map.set(r.date, r.value);
-  const dates=Array.from(map.keys()).sort((a,b)=>String(a).localeCompare(String(b)));
-  return dates.map(d=>{
-    const v=map.get(d);
-    return {date:d, open:v, high:v, low:v, close:v};
+function buildLineSeries(rows, target){
+  const map=new Map(); rows.forEach(r=>{ if(r.name===target) map.set(r.date, r.value); });
+  return Array.from(map.keys()).sort().map(d=>({date:d, open:map.get(d), high:map.get(d), low:map.get(d), close:map.get(d)}));
+}
+function buildOhlcSeries(rows, base){
+  const byD = new Map();
+  rows.forEach(r=>{
+    const sp=splitOhlcName(r.name); if(sp.base!==base||!sp.field) return;
+    if(!byD.has(r.date)) byD.set(r.date, {date:r.date, open:null, high:null, low:null, close:null});
+    const o=byD.get(r.date);
+    if(sp.field==="始値") o.open=r.value; if(sp.field==="高値") o.high=r.value; if(sp.field==="安値") o.low=r.value; if(sp.field==="終値") o.close=r.value;
   });
+  return Array.from(byD.keys()).sort().map(d=>byD.get(d));
 }
 
-function buildOhlcSeriesFromLong(rows, baseName){
-  const names = { open: baseName + "始値", high: baseName + "高値", low: baseName + "安値", close: baseName + "終値" };
-  const byDate = new Map();
-  for(const r of rows || []){
-    if(!r || !r.date) continue;
-    if(r.name!==names.open && r.name!==names.high && r.name!==names.low && r.name!==names.close) continue;
-    if(!byDate.has(r.date)) byDate.set(r.date, {date:r.date, open:null, high:null, low:null, close:null});
-    const o = byDate.get(r.date);
-    if(r.name===names.open)  o.open = r.value;
-    if(r.name===names.high)  o.high = r.value;
-    if(r.name===names.low)   o.low  = r.value;
-    if(r.name===names.close) o.close= r.value;
-  }
-  const dates = Array.from(byDate.keys()).sort((a,b)=>String(a).localeCompare(String(b)));
-  return dates.map(d => byDate.get(d));
+function calculateMA(data, p){
+  const r=new Array(data.length).fill(null);
+  for(let i=p-1; i<data.length; i++){ let s=0; for(let j=0;j<p;j++) s+=data[i-j].close; r[i]=s/p; }
+  return r;
 }
-
-function calculateMA(data, period){
-  const result=new Array(data.length).fill(null);
-  for(let i=period-1;i<data.length;i++){
-    let sum=0; for(let j=0;j<period;j++) sum += data[i-j].close;
-    result[i]=sum/period;
+function calculateRSI(data, p){
+  const r=new Array(data.length).fill(null); if(data.length<=p) return r;
+  let g=0, l=0; for(let i=1;i<=p;i++){ const d=data[i].close-data[i-1].close; if(d>0) g+=d; else l-=d; }
+  let ag=g/p, al=l/p; r[p]=al===0?100:(100-(100/(1+ag/al)));
+  for(let i=p+1;i<data.length;i++){
+    const d=data[i].close-data[i-1].close; const gn=d>0?d:0, ls=d<0?-d:0;
+    ag=(ag*(p-1)+gn)/p; al=(al*(p-1)+ls)/p; r[i]=al===0?100:(100-(100/(1+ag/al)));
   }
-  return result;
+  return r;
 }
-
-function calculateRSI(data, period){
-  const result=new Array(data.length).fill(null);
-  if(data.length <= period) return result;
-  let gains=0, losses=0;
-  for(let i=1;i<=period;i++){
-    const diff=data[i].close - data[i-1].close;
-    if(diff>0) gains += diff; else losses -= diff;
-  }
-  let avgGain=gains/period; let avgLoss=losses/period;
-  result[period] = (avgLoss===0) ? 100 : (100 - (100/(1+avgGain/avgLoss)));
-  for(let i=period+1;i<data.length;i++){
-    const diff=data[i].close - data[i-1].close;
-    const gain=diff>0?diff:0; const loss=diff<0?-diff:0;
-    avgGain=(avgGain*(period-1)+gain)/period; avgLoss=(avgLoss*(period-1)+loss)/period;
-    result[i] = (avgLoss===0) ? 100 : (100 - (100/(1+avgGain/avgLoss)));
-  }
-  return result;
-}
-
-function calculateMACD(data, shortP, longP, sigP){
-  const macdLine=new Array(data.length).fill(null);
-  const signalLine=new Array(data.length).fill(null);
-  const histogram=new Array(data.length).fill(null);
-  const kS=2/(shortP+1), kL=2/(longP+1);
-  let emaS=data[0].close, emaL=data[0].close;
+function calculateMACD(data, sP, lP, sigP){
+  const m=new Array(data.length).fill(null), s=new Array(data.length).fill(null), h=new Array(data.length).fill(null);
+  let eS=data[0].close, eL=data[0].close;
   for(let i=0;i<data.length;i++){
-    const price=data[i].close;
-    if(i===0){ emaS=price; emaL=price; }
-    else{ emaS=(price-emaS)*kS+emaS; emaL=(price-emaL)*kL+emaL; }
-    if(i>=longP-1) macdLine[i]=emaS-emaL;
+    eS+=(data[i].close-eS)*(2/(sP+1)); eL+=(data[i].close-eL)*(2/(lP+1));
+    if(i>=lP-1) m[i]=eS-eL;
   }
-  const firstValid=longP-1; if(firstValid<0 || firstValid>=data.length) return {macd:macdLine, signal:signalLine, hist:histogram};
-  let sigEma=macdLine[firstValid]; const kSig=2/(sigP+1);
-  for(let i=firstValid;i<data.length;i++){
-    if(i===firstValid){ signalLine[i]=macdLine[i]; sigEma=macdLine[i]; }
-    else{ sigEma=(macdLine[i]-sigEma)*kSig+sigEma; signalLine[i]=sigEma; }
-    histogram[i]=macdLine[i]-signalLine[i];
+  let eSig=m[lP-1];
+  for(let i=lP-1;i<data.length;i++){
+    if(i===lP-1) s[i]=m[i]; else { eSig+=(m[i]-eSig)*(2/(sigP+1)); s[i]=eSig; }
+    h[i]=m[i]-s[i];
   }
-  return {macd:macdLine, signal:signalLine, hist:histogram};
+  return {macd:m, signal:s, hist:h};
 }
-
-function calculateStochastic(data, kP, dP){
-  const kLine=new Array(data.length).fill(null);
-  const dLine=new Array(data.length).fill(null);
+function calculateStoch(data, kP, dP){
+  const k=new Array(data.length).fill(null), d=new Array(data.length).fill(null);
   for(let i=kP-1;i<data.length;i++){
-    let highest=-Infinity, lowest=Infinity;
-    for(let j=0;j<kP;j++){ highest=Math.max(highest, data[i-j].high); lowest=Math.min(lowest, data[i-j].low); }
-    kLine[i]=(highest!==lowest) ? (((data[i].close-lowest)/(highest-lowest))*100) : 50;
+    let hi=-Infinity, lo=Infinity; for(let j=0;j<kP;j++){ hi=Math.max(hi,data[i-j].high); lo=Math.min(lo,data[i-j].low); }
+    k[i]=hi===lo?50:((data[i].close-lo)/(hi-lo))*100;
   }
-  for(let i=kP-1+dP-1;i<data.length;i++){
-    let sum=0; for(let j=0;j<dP;j++) sum += kLine[i-j];
-    dLine[i]=sum/dP;
-  }
-  return {k:kLine, d:dLine};
+  for(let i=kP+dP-2;i<data.length;i++){ let s=0; for(let j=0;j<dP;j++) s+=k[i-j]; d[i]=s/dP; }
+  return {k, d};
 }
 
 function recomputeIndicators(){
-  if(!series || series.length===0) return;
-  indicators.ma1 = calculateMA(series, params.ma1);
-  indicators.ma2 = calculateMA(series, params.ma2);
-  indicators.rsi = calculateRSI(series, params.rsi);
-  indicators.stoch = calculateStochastic(series, params.stochK, params.stochD);
-  indicators.macd = calculateMACD(series, params.macdShort, params.macdLong, params.macdSignal);
-}
-
-function clampView(){
-  if(!series || series.length===0){ displayCount=100; offsetX=0; return; }
-  displayCount = Math.max(10, Math.min(displayCount, series.length));
-  offsetX = Math.max(0, Math.min(offsetX, series.length - displayCount));
+  if(!series.length) return;
+  indicators.ma1=calculateMA(series,params.ma1); indicators.ma2=calculateMA(series,params.ma2);
+  indicators.rsi=calculateRSI(series,params.rsi); indicators.macd=calculateMACD(series,params.macdShort,params.macdLong,params.macdSignal);
+  indicators.stoch=calculateStoch(series,params.stochK,params.stochD);
 }
 
 function getVisibleWindow(){
-  clampView();
-  const n = series.length;
-  const start = Math.max(0, n - displayCount - Math.round(offsetX));
-  const end = Math.min(n, start + displayCount);
-  const realSlice = series.slice(start, end);
-  const padN = displayCount - realSlice.length;
-  const pads = new Array(padN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null}));
-  const visibleCandles = pads.concat(realSlice);
-  const visibleIndices = new Array(padN).fill(null).concat(Array.from({length: realSlice.length}, (_,i)=> start + i));
-  return { visibleCandles, visibleIndices };
+  displayCount=Math.max(10, Math.min(displayCount, series.length||100));
+  offsetX=Math.max(0, Math.min(offsetX, (series.length||0)-displayCount));
+  const start=Math.max(0, series.length-displayCount-Math.round(offsetX));
+  const end=Math.min(series.length, start+displayCount);
+  const slice=series.slice(start, end); const padN=displayCount-slice.length;
+  const pads=new Array(padN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null}));
+  return { visibleCandles: pads.concat(slice), visibleIndices: new Array(padN).fill(null).concat(Array.from({length:slice.length},(_,i)=>start+i)) };
 }
 
 function updateViewInfo(){
-  const el = document.getElementById('viewInfo');
-  if(!series || series.length===0){ el.textContent = `表示本数: ${displayCount} / 表示範囲: -`; return; }
-  const { visibleCandles } = getVisibleWindow();
-  let sd=null, ed=null;
-  for(let c of visibleCandles){ if(c.date){ sd=c.date; break; } }
-  for(let i=visibleCandles.length-1;i>=0;i--){ if(visibleCandles[i].date){ ed=visibleCandles[i].date; break; } }
-  el.textContent = `表示本数: ${displayCount} / 表示範囲: ${sd&&ed ? `${sd} ~ ${ed}` : '-'}`;
+  const el=document.getElementById('viewInfo'); if(!series.length){ el.textContent="表示本数: -"; return; }
+  const {visibleCandles: vC}=getVisibleWindow(); let sd="", ed="";
+  for(let c of vC){ if(c.date){ sd=c.date; break; } } for(let i=vC.length-1;i>=0;i--){ if(vC[i].date){ ed=vC[i].date; break; } }
+  el.textContent=`表示本数: ${displayCount} / 表示範囲: ${sd} ~ ${ed}`;
 }
 
-async function autoLoadLongFile(){
-  const el=document.getElementById('autoStatus');
-  try{
-    el.textContent="読み込み中...";
-    const res=await fetch('./combined_long.csv', {cache:'no-store'});
-    if(!res.ok) throw new Error("fetch失敗");
-    longRows=parseLongFormat(await res.text());
-    symbolMeta = buildSymbolMeta(longRows);
-
-    try {
-      const resC = await fetch('./chartlist.csv', {cache:'no-store'});
-      if(resC.ok) chartListItems = parseChartList(await resC.text());
-    } catch(e){}
-
-    populateSymbolSelect();
-    el.textContent=`ロード完了: ${longRows.length}行`;
-    applySymbol();
-  }catch(e){ el.textContent=`エラー: ${e.message}`; }
+async function autoLoadFiles(){
+  try {
+    const rL=await fetch('./combined_long.csv',{cache:'no-store'}); if(!rL.ok) throw new Error();
+    longRows=parseLongFormat(await rL.text()); symbolMeta=buildSymbolMeta(longRows);
+    const rC=await fetch('./chartlist.csv',{cache:'no-store'}); if(rC.ok) chartListItems=parseChartList(await rC.text());
+    populateSymbolSelect(); applySymbol();
+  } catch(e){ document.getElementById('autoStatus').textContent="読込エラー"; }
 }
 
 function applySymbol(){
-  const raw = document.getElementById('symbolSelect')?.value;
-  if(!raw) return;
-  const sp = splitOhlcName(raw);
-  if(sp.field && symbolMeta.candleBaseSet.has(sp.base)){
-    chartMode = "candle"; series = buildOhlcSeriesFromLong(longRows, sp.base);
-  }else if(symbolMeta.candleBaseSet.has(raw)){
-    chartMode = "candle"; series = buildOhlcSeriesFromLong(longRows, raw);
-  }else{
-    chartMode = "line"; series = buildLineSeriesFromLong(longRows, raw);
-  }
-  offsetX = 0;
-  recomputeIndicators();
-  updateViewInfo();
-  drawChart();
-}
-
-function drawChart(){
-  if(!mainCanvas || !series || series.length===0) return;
-  const { visibleCandles, visibleIndices } = getVisibleWindow();
-  drawMain(visibleCandles, visibleIndices);
-  drawMacd(visibleIndices);
-  drawStoch(visibleIndices);
-  drawRsi(visibleIndices);
-  saveBackBuffers();
-}
-
-function drawMain(visibleCandles, visibleIndices){
-  const ctx=mainCtx;
-  const w=mainCanvas.width, h=mainCanvas.height;
-  const pad={t:20,b:30,l:10,r:60};
-  const chartW=w-pad.l-pad.r;
-  const chartH=h-pad.t-pad.b;
-  ctx.clearRect(0,0,w,h);
-
-  // 背景に銘柄名を表示
-  const sel = document.getElementById('symbolSelect');
-  const label = sel?.options[sel.selectedIndex]?.textContent || "";
-  if(label){
-    ctx.save();
-    ctx.font = "bold 60px sans-serif";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillText(label, pad.l + 10, pad.t + 10);
-    ctx.restore();
-  }
-
-  let minP=Infinity, maxP=-Infinity;
-  visibleIndices.forEach((sIdx, i)=>{
-    const c = visibleCandles[i];
-    if(c.high!=null) maxP=Math.max(maxP, c.high);
-    if(c.low!=null) minP=Math.min(minP, c.low);
-    if(sIdx!=null){
-      const m1=indicators.ma1[sIdx], m2=indicators.ma2[sIdx];
-      if(m1!=null){ minP=Math.min(minP,m1); maxP=Math.max(maxP,m1); }
-      if(m2!=null){ minP=Math.min(minP,m2); maxP=Math.max(maxP,m2); }
-    }
-  });
-  if(minP===Infinity) return;
-  const range=(maxP-minP)||1; minP-=range*0.05; maxP+=range*0.05;
-  const scaleY=chartH/(maxP-minP);
-  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
-  const getY=(val)=>pad.t+chartH-(val-minP)*scaleY;
-
-  ctx.strokeStyle='#eee';
-  for(let i=0;i<=5;i++){
-    const y=pad.t+(chartH*i/5); ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
-    ctx.fillStyle='#666'; ctx.fillText((maxP-(maxP-minP)*(i/5)).toFixed(0), w-pad.r+5, y+4);
-  }
-
-  mainCanvas.candlePositions = visibleCandles.map((c, i)=>({ x: getX(i), w: chartW/visibleCandles.length, seriesIndex: visibleIndices[i] }));
-
-  if(chartMode==="candle"){
-    const bodyW=(chartW/visibleCandles.length)*0.6;
-    visibleCandles.forEach((c,i)=>{
-      if(c.open==null) return;
-      const x=getX(i), yH=getY(c.high), yL=getY(c.low), yO=getY(c.open), yC=getY(c.close);
-      const col = c.close >= c.open ? '#26a69a' : '#ef5350';
-      ctx.strokeStyle=col; ctx.beginPath(); ctx.moveTo(x, yH); ctx.lineTo(x, yL); ctx.stroke();
-      ctx.fillStyle=col; ctx.fillRect(x - bodyW/2, Math.min(yO, yC), bodyW, Math.max(1, Math.abs(yO-yC)));
-    });
-  } else {
-    ctx.strokeStyle='#333'; ctx.beginPath();
-    let moved=false;
-    visibleCandles.forEach((c,i)=>{
-      if(c.close==null){ moved=false; return; }
-      const x=getX(i), y=getY(c.close);
-      if(!moved){ ctx.moveTo(x,y); moved=true; } else ctx.lineTo(x,y);
-    });
-    ctx.stroke();
-  }
-
-  const drawL = (arr, col) => {
-    ctx.strokeStyle=col; ctx.beginPath(); let m=false;
-    visibleIndices.forEach((sIdx, i)=>{
-      if(sIdx==null || arr[sIdx]==null){ m=false; return; }
-      const x=getX(i), y=getY(arr[sIdx]);
-      if(!m){ ctx.moveTo(x,y); m=true; } else ctx.lineTo(x,y);
-    });
-    ctx.stroke();
-  };
-  drawL(indicators.ma1, '#ff9800'); drawL(indicators.ma2, '#2196f3');
-}
-
-function drawMacd(visibleIndices){
-  if(collapsed.macd) return;
-  const ctx=macdCtx; const w=macdCanvas.width, h=macdCanvas.height;
-  const pad={t:10,b:10,l:10,r:60}; ctx.clearRect(0,0,w,h);
-  const data=indicators.macd; let minV=-1, maxV=1;
-  visibleIndices.forEach(sIdx=>{
-    if(sIdx==null) return;
-    [data.macd[sIdx], data.signal[sIdx], data.hist[sIdx]].forEach(v=>{ if(v!=null){ minV=Math.min(minV,v); maxV=Math.max(maxV,v); }});
-  });
-  const scaleY=(h-20)/(maxV-minV);
-  const getX=(i)=>pad.l+(i+0.5)*((w-pad.l-pad.r)/visibleIndices.length);
-  const getY=(v)=>10+(h-20)-(v-minV)*scaleY;
-  const y0=getY(0); ctx.strokeStyle='#ccc'; ctx.beginPath(); ctx.moveTo(pad.l,y0); ctx.lineTo(w-pad.r,y0); ctx.stroke();
-  visibleIndices.forEach((sIdx,i)=>{
-    if(sIdx==null || data.hist[sIdx]==null) return;
-    ctx.fillStyle=data.hist[sIdx]>=0?'#26a69a':'#ef5350';
-    const x=getX(i), y=getY(data.hist[sIdx]);
-    ctx.fillRect(x-2, Math.min(y,y0), 4, Math.abs(y-y0));
-  });
-}
-
-function drawStoch(visibleIndices){
-  if(collapsed.stoch) return;
-  const ctx=stochCtx; const w=stochCanvas.width, h=stochCanvas.height;
-  const pad={t:10,b:10,l:10,r:60}; ctx.clearRect(0,0,w,h);
-  const getX=(i)=>pad.l+(i+0.5)*((w-pad.l-pad.r)/visibleIndices.length);
-  const getY=(v)=>10+(h-20)-(v/100)*(h-20);
-  ctx.strokeStyle='#eee'; [20,80].forEach(l=>{ ctx.beginPath(); ctx.moveTo(pad.l,getY(l)); ctx.lineTo(w-pad.r,getY(l)); ctx.stroke(); });
-  const drawL=(arr,col)=>{
-    ctx.strokeStyle=col; ctx.beginPath(); let m=false;
-    visibleIndices.forEach((sIdx,i)=>{
-      if(sIdx==null || arr[sIdx]==null){ m=false; return; }
-      if(!m){ ctx.moveTo(getX(i),getY(arr[sIdx])); m=true; } else ctx.lineTo(getX(i),getY(arr[sIdx]));
-    }); ctx.stroke();
-  };
-  drawL(indicators.stoch.k, '#00bcd4'); drawL(indicators.stoch.d, '#ff5722');
-}
-
-function drawRsi(visibleIndices){
-  if(collapsed.rsi) return;
-  const ctx=rsiCtx; const w=rsiCanvas.width, h=rsiCanvas.height;
-  const pad={t:10,b:10,l:10,r:60}; ctx.clearRect(0,0,w,h);
-  const getX=(i)=>pad.l+(i+0.5)*((w-pad.l-pad.r)/visibleIndices.length);
-  const getY=(v)=>10+(h-20)-(v/100)*(h-20);
-  ctx.strokeStyle='#eee'; [30,70].forEach(l=>{ ctx.beginPath(); ctx.moveTo(pad.l,getY(l)); ctx.lineTo(w-pad.r,getY(l)); ctx.stroke(); });
-  ctx.strokeStyle='#9c27b0'; ctx.beginPath(); let m=false;
-  visibleIndices.forEach((sIdx,i)=>{
-    if(sIdx==null || indicators.rsi[sIdx]==null){ m=false; return; }
-    if(!m){ ctx.moveTo(getX(i),getY(indicators.rsi[sIdx])); m=true; } else ctx.lineTo(getX(i),getY(indicators.rsi[sIdx]));
-  }); ctx.stroke();
-}
-
-function drawCrosshair(x){
-  restoreBackBuffers(); if(x<0) return;
-  [mainCtx, macdCtx, stochCtx, rsiCtx].forEach((ctx, i)=>{
-    if(!ctx || (i>0 && Object.values(collapsed)[i-1])) return;
-    ctx.save(); ctx.strokeStyle='#999'; ctx.setLineDash([3,3]);
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,ctx.canvas.height); ctx.stroke(); ctx.restore();
-  });
-}
-
-function handleTooltip(e, canvas){
-  if(!mainCanvas.candlePositions || series.length===0) return;
-  const mouseX=e.clientX-canvas.getBoundingClientRect().left;
-  const p = mainCanvas.candlePositions.find(pp => Math.abs(mouseX - pp.x) < pp.w/2);
-  if(!p || p.seriesIndex==null){ tooltip.style.display='none'; drawCrosshair(-1); return; }
-  const c = series[p.seriesIndex];
-  tooltip.innerHTML=`<strong>${c.date}</strong><br>終値:${c.close.toLocaleString()}`;
-  tooltip.style.display='block'; tooltip.style.left=(e.clientX+15)+'px'; tooltip.style.top=(e.clientY+15)+'px';
-  drawCrosshair(p.x);
-}
-
-function setupEventListeners(){
-  document.getElementById('helpBtn').onclick = ()=> document.getElementById('helpModal').style.display='flex';
-  document.getElementById('helpCloseBtn').onclick = ()=> document.getElementById('helpModal').style.display='none';
-  document.getElementById('symbolSelect').onchange = applySymbol;
-  document.getElementById('quickSelect').onchange = (e)=>{ if(e.target.value){ displayCount=parseInt(e.target.value); offsetX=0; applySymbol(); }};
-  
-  [mainCanvas, macdCanvas, stochCanvas, rsiCanvas].forEach(cvs=>{
-    cvs.onwheel = (e)=>{ e.preventDefault(); displayCount += (e.deltaY < 0 ? -1 : 1); applySymbol(); };
-    cvs.onmousedown = (e)=>{ isDragging=true; dragStartX=e.clientX; dragStartOffset=offsetX; };
-    cvs.onmousemove = (e)=>{ if(isDragging){ offsetX = dragStartOffset + (dragStartX - e.clientX)/(cvs.width/displayCount); applySymbol(); } else handleTooltip(e, cvs); };
-    cvs.onmouseup = cvs.onmouseleave = ()=>{ isDragging=false; tooltip.style.display='none'; drawCrosshair(-1); };
-  });
-}
-
-function init(){
-  mainCanvas=document.getElementById('mainChart'); mainCtx=mainCanvas.getContext('2d');
-  macdCanvas=document.getElementById('macdChart'); macdCtx=macdCanvas.getContext('2d');
-  stochCanvas=document.getElementById('stochChart'); stochCtx=stochCanvas.getContext('2d');
-  rsiCanvas=document.getElementById('rsiChart'); rsiCtx=rsiCanvas.getContext('2d');
-  tooltip=document.getElementById('tooltip');
-  setupEventListeners();
-  const res = ()=>{ [mainCanvas, macdCanvas, stochCanvas, rsiCanvas].forEach(c=>{ c.width=c.clientWidth; c.height=c.clientHeight; }); drawChart(); };
-  window.onresize = res; res();
-  autoLoadLongFile();
-}
-window.onload = init;
-</script>
-</body>
-</html>
-
-
+  const sel=document.getElementById('symbolSelect'); if(!sel.value) return;
+  if(symbolMeta.candleBaseSet.has(sel.value)){ chartMode="candle"; series=buildOhlcSeries(longRows, sel.value); }
+  else
