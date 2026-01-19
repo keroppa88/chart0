@@ -619,6 +619,9 @@ function getVisibleWindow(){
   clampView();
   const n = series.length;
 
+  // 右スペースを追加する場合は5日分追加
+  const extraSpace = rightSpaceEnabled ? 5 : 0;
+
   const startRaw = n - displayCount - offsetX;
   const endRaw = startRaw + displayCount;
 
@@ -628,13 +631,17 @@ function getVisibleWindow(){
   const realSlice = (start < end) ? series.slice(start, end) : [];
   const realLen = realSlice.length;
 
-  const padN = displayCount - realLen;
-  const pads = new Array(padN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null}));
+  const leftPadN = displayCount - realLen;
+  const leftPads = new Array(leftPadN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null, volume:null}));
 
-  const visibleCandles = pads.concat(realSlice);
+  // 右スペース用のパディング
+  const rightPads = new Array(extraSpace).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null, volume:null}));
 
-  const visibleIndices = new Array(padN).fill(null).concat(
-    Array.from({length: realLen}, (_,i)=> start + i)
+  const visibleCandles = leftPads.concat(realSlice, rightPads);
+
+  const visibleIndices = new Array(leftPadN).fill(null).concat(
+    Array.from({length: realLen}, (_,i)=> start + i),
+    new Array(extraSpace).fill(null)
   );
 
   return { visibleCandles, visibleIndices, startSeriesIndex: start, endSeriesIndex: end };
@@ -1389,3 +1396,4 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
