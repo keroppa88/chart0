@@ -746,6 +746,17 @@ function drawMain(visibleCandles, visibleIndices){
 
   ctx.clearRect(0,0,w,h);
 
+  // 銘柄名を背景として最初に描画（大きく、グレー）
+  if(currentSymbolDisplay){
+    ctx.save();
+    ctx.fillStyle='#d0d0d0';
+    ctx.font='bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.textAlign='left';
+    ctx.textBaseline='top';
+    ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
+    ctx.restore();
+  }
+
   let minP=Infinity, maxP=-Infinity;
 
   visibleIndices.forEach((sIdx, i)=>{
@@ -868,17 +879,6 @@ function drawMain(visibleCandles, visibleIndices){
   };
   drawLine(indicators.ma1, '#ff9800');
   drawLine(indicators.ma2, '#2196f3');
-
-  // 左上に銘柄名を大きめフォントで表示
-  if(currentSymbolDisplay){
-    ctx.save();
-    ctx.fillStyle='#333';
-    ctx.font='bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.textAlign='left';
-    ctx.textBaseline='top';
-    ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
-    ctx.restore();
-  }
 }
 
 function drawMacd(visibleIndices){
