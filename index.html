@@ -32,7 +32,7 @@
     .legend-item { display:flex; align-items:center; gap:4px; }
     .legend-color { width:12px; height:12px; border-radius:2px; }
 
-    canvas { display:block; width:100%; cursor:crosshair; }
+    canvas { display:block; width:100%; cursor:crosshair; background:#fff; }
     #mainChart { height:350px; border:1px solid #ddd; border-bottom:none; position:relative; }
 
     .indicator-container { border:1px solid #ddd; border-top:none; background:#fff; position:relative; min-height:24px; }
@@ -102,12 +102,11 @@
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
     <div class="legend-item" style="margin-left:auto;">
-    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-      <input type="checkbox" id="rightSpaceCheck" checked>
-      <span>右スペース</span>
-    </label>
-  </div>
-</div>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="rightSpaceCheck" checked>
+        <span>右スペース</span>
+      </label>
+    </div>
   </div>
 
   <canvas id="mainChart"></canvas>
@@ -615,10 +614,6 @@ function getVisibleWindow(){
   clampView();
   const n = series.length;
 
-  // 右スペースを追加する場合は5日分追加
-  const extraSpace = rightSpaceEnabled ? 5 : 0;
-  const totalDisplay = displayCount + extraSpace;
-
   const startRaw = n - displayCount - offsetX;
   const endRaw = startRaw + displayCount;
 
@@ -628,17 +623,13 @@ function getVisibleWindow(){
   const realSlice = (start < end) ? series.slice(start, end) : [];
   const realLen = realSlice.length;
 
-  const leftPadN = displayCount - realLen;
-  const leftPads = new Array(leftPadN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null, volume:null}));
+  const padN = displayCount - realLen;
+  const pads = new Array(padN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null}));
 
-  // 右スペース用のパディング
-  const rightPads = new Array(extraSpace).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null, volume:null}));
+  const visibleCandles = pads.concat(realSlice);
 
-  const visibleCandles = leftPads.concat(realSlice, rightPads);
-
-  const visibleIndices = new Array(leftPadN).fill(null).concat(
-    Array.from({length: realLen}, (_,i)=> start + i),
-    new Array(extraSpace).fill(null)
+  const visibleIndices = new Array(padN).fill(null).concat(
+    Array.from({length: realLen}, (_,i)=> start + i)
   );
 
   return { visibleCandles, visibleIndices, startSeriesIndex: start, endSeriesIndex: end };
@@ -735,6 +726,9 @@ function applySymbol(){
       ? `${label}: 実データ${series.length}件 / 表示:${chartMode==="candle" ? "ローソク足" : "折れ線"}`
       : `${label}: データなし`;
 
+  const leg = document.getElementById('priceLegend');
+  if(leg) leg.textContent = (chartMode==="candle") ? "価格（ローソク足）" : "終値（折れ線）";
+
   updateViewInfo();
   drawChart();
 }
@@ -813,27 +807,27 @@ function drawMain(visibleCandles, visibleIndices){
   minP-=range*0.05; maxP+=range*0.05;
   const scaleY=chartH/(maxP-minP);
 
-const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
-const getY=(val)=>pad.t+chartH-(val-minP)*scaleY;
+  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
+  const getY=(val)=>pad.t+chartH-(val-minP)*scaleY;
 
-// 価格を適切な単位で丸める関数
-const roundPrice = (price) => {
-  if(price < 1000) return Math.round(price / 10) * 10;
-  if(price < 3000) return Math.round(price / 50) * 50;
-  if(price < 5000) return Math.round(price / 100) * 100;
-  return Math.round(price / 500) * 500;
-};
+  // 価格を適切な単位で丸める関数
+  const roundPrice = (price) => {
+    if(price < 1000) return Math.round(price / 10) * 10;
+    if(price < 3000) return Math.round(price / 50) * 50;
+    if(price < 5000) return Math.round(price / 100) * 100;
+    return Math.round(price / 500) * 500;
+  };
 
-ctx.strokeStyle='#eee'; ctx.lineWidth=1;
-const gridSteps=5;
-for(let i=0;i<=gridSteps;i++){
-  const y=pad.t+(chartH*i/gridSteps);
-  const rawPrice=maxP-(maxP-minP)*(i/gridSteps);
-  const price=roundPrice(rawPrice);
-  ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
-  ctx.fillStyle='#666'; ctx.textAlign='left';
-  ctx.fillText(price.toLocaleString(), w-pad.r+5, y+4);
-}
+  ctx.strokeStyle='#eee'; ctx.lineWidth=1;
+  const gridSteps=5;
+  for(let i=0;i<=gridSteps;i++){
+    const y=pad.t+(chartH*i/gridSteps);
+    const rawPrice=maxP-(maxP-minP)*(i/gridSteps);
+    const price=roundPrice(rawPrice);
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+    ctx.fillStyle='#666'; ctx.textAlign='left';
+    ctx.fillText(price.toLocaleString(), w-pad.r+5, y+4);
+  }
 
   mainCanvas.candlePositions = visibleCandles.map((c, i)=>({
     x: getX(i),
@@ -1282,50 +1276,50 @@ function setupEventListeners(){
   helpModal.addEventListener('click', (e)=>{ if(e.target===helpModal) closeHelp(); });
   window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && helpModal.style.display==='flex') closeHelp(); });
 
-document.getElementById('symbolSelect')?.addEventListener('change', ()=>applySymbol());
+  document.getElementById('symbolSelect')?.addEventListener('change', ()=>applySymbol());
 
-// 銘柄選択で矢印キー操作
-document.getElementById('symbolSelect')?.addEventListener('keydown', (e)=>{
-  const sel = e.target;
-  const currentIndex = sel.selectedIndex;
-  const maxIndex = sel.options.length - 1;
-  let newIndex = currentIndex;
+  // 銘柄選択で矢印キー操作
+  document.getElementById('symbolSelect')?.addEventListener('keydown', (e)=>{
+    const sel = e.target;
+    const currentIndex = sel.selectedIndex;
+    const maxIndex = sel.options.length - 1;
+    let newIndex = currentIndex;
 
-  if(e.key === 'ArrowRight') {
-    e.preventDefault();
-    newIndex = Math.min(currentIndex + 1, maxIndex);
-  } else if(e.key === 'ArrowLeft') {
-    e.preventDefault();
-    newIndex = Math.max(currentIndex - 1, 0);
-  } else if(e.key === 'ArrowDown') {
-    e.preventDefault();
-    newIndex = Math.min(currentIndex + 10, maxIndex);
-  } else if(e.key === 'ArrowUp') {
-    e.preventDefault();
-    newIndex = Math.max(currentIndex - 10, 0);
-  }
+    if(e.key === 'ArrowRight') {
+      e.preventDefault();
+      newIndex = Math.min(currentIndex + 1, maxIndex);
+    } else if(e.key === 'ArrowLeft') {
+      e.preventDefault();
+      newIndex = Math.max(currentIndex - 1, 0);
+    } else if(e.key === 'ArrowDown') {
+      e.preventDefault();
+      newIndex = Math.min(currentIndex + 10, maxIndex);
+    } else if(e.key === 'ArrowUp') {
+      e.preventDefault();
+      newIndex = Math.max(currentIndex - 10, 0);
+    }
 
-  if(newIndex !== currentIndex) {
-    sel.selectedIndex = newIndex;
-    applySymbol();
-  }
-});
+    if(newIndex !== currentIndex) {
+      sel.selectedIndex = newIndex;
+      applySymbol();
+    }
+  });
 
-document.getElementById('quickSelect')?.addEventListener('change', (e)=>{
-  const v = e.target.value;
-  if(!v) return;
-  displayCount = parseInt(v, 10);
-  offsetX = 0;
-  clampView();
-  updateViewInfo();
-  drawChart();
-});
+  document.getElementById('quickSelect')?.addEventListener('change', (e)=>{
+    const v = e.target.value;
+    if(!v) return;
+    displayCount = parseInt(v, 10);
+    offsetX = 0;
+    clampView();
+    updateViewInfo();
+    drawChart();
+  });
 
-// 右スペースチェックボックス
-document.getElementById('rightSpaceCheck')?.addEventListener('change', (e)=>{
-  rightSpaceEnabled = e.target.checked;
-  drawChart();
-});
+  // 右スペースチェックボックス
+  document.getElementById('rightSpaceCheck')?.addEventListener('change', (e)=>{
+    rightSpaceEnabled = e.target.checked;
+    drawChart();
+  });
 
   const inputs=document.querySelectorAll('.param-group input');
   inputs.forEach(inp=>{
@@ -1390,11 +1384,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
