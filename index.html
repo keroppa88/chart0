@@ -33,7 +33,7 @@
     .legend-color { width:12px; height:12px; border-radius:2px; }
 
     canvas { display:block; width:100%; cursor:crosshair; }
-    #mainChart { height:350px; border:1px solid #ddd; border-bottom:none; }
+    #mainChart { height:350px; border:1px solid #ddd; border-bottom:none; position:relative; }
 
     .indicator-container { border:1px solid #ddd; border-top:none; background:#fff; position:relative; }
     .indicator-controls { position:absolute; top:2px; right:2px; pointer-events:auto; display:flex; gap:2px; z-index:10; }
@@ -158,7 +158,7 @@
     </div>
     <div class="modal-body">
 - 同一フォルダの「combined_long.csv」を起動時に自動読込します（タブ/カンマ自動判定）。
-- （任意）同一フォルダの「chartlist.csv」があれば、プルダウン銘柄をその順序・銘柄に限定します（形式: コード,銘柄名）。
+- （任意）同一フォルダの「chartlist.csv」があれば、プルダウン銘柄をその順序・銘柄に限定します（1列=銘柄名、または value,label の2列）。
 - ロング形式: 日付 / 曜日 / 日種類 / 商品名 / 数値
 - マウスホイール: 1日単位で可変（前に回す=表示日数を縮める / 後ろに回す=表示日数を広げる）
 - ドラッグ: 表示範囲を左右に移動（最新から過去へ）
@@ -174,13 +174,12 @@
 /* =========================
    State
 ========================= */
-let longRows = [];         // raw rows (long)
-let chartListItems = null; // [{value,label,code,name}] loaded from chartlist.csv (optional)
-let series = [];           // selected symbol: [{date, open, high, low, close}] ascending
-let displayCount = 100;    // visible bars count (variable by wheel, step=1)
-let offsetX = 0;           // how many bars back from latest (0=latest window)
+let longRows = [];
+let chartListItems = null;
+let series = [];
+let displayCount = 100;
+let offsetX = 0;
 
-/* drag */
 let isDragging = false;
 let dragStartX = 0;
 let dragStartOffset = 0;
@@ -200,9 +199,6 @@ let tooltip;
 
 let collapsed = { macd: false, stoch: false, rsi: false };
 
-// 選択中プルダウン表示文字（例: "2502,アサヒ"）
-let selectedSymbolDisplayText = "";
-
 let indicators = {
   ma1: [], ma2: [],
   rsi: [],
@@ -210,7 +206,6 @@ let indicators = {
   macd: { macd: [], signal: [], hist: [] }
 };
 
-/* back buffer for crosshair */
 let backBuffers = { main: null, macd: null, stoch: null, rsi: null };
 function resetBackBuffers(){ backBuffers.main = backBuffers.macd = backBuffers.stoch = backBuffers.rsi = null; }
 function saveBackBuffers(){
@@ -229,6 +224,11 @@ function restoreBackBuffers(){
     if(!collapsed.rsi && backBuffers.rsi) rsiCtx.putImageData(backBuffers.rsi,0,0);
   }catch(e){}
 }
+
+/* =========================
+   現在選択中の銘柄情報
+========================= */
+let currentSymbolDisplay = "";
 
 /* =========================
    Parsing (TSV/CSV)
@@ -274,21 +274,41 @@ function parseLongFormat(text){
   return rows;
 }
 
-/* chartlist.csv: 必ず "2502,アサヒ" 形式 */
 function parseChartList(text){
   const raw = String(text||"").replace(/\uFEFF/g,'').trim();
   if(!raw) return [];
   const lines = raw.split(/\r?\n/).map(s=>s.trim()).filter(s=>s && !s.startsWith('#'));
-  const out=[];
-  for(const line of lines){
-    const parts = line.split(',');
-    const code = (parts[0]||"").trim();
-    const name = (parts.slice(1).join(',')||"").trim();
-    if(!code || !name) continue;
+  if(lines.length===0) return [];
 
-    const value = `${code}${name}`;     // 内部値は "," を除去（例: 2502アサヒ）
-    const label = `${code},${name}`;    // 表示は "2502,アサヒ"
-    out.push({ value, label, code, name });
+  const first = lines[0];
+  const hasDelim = /[,\t]/.test(first);
+  if(!hasDelim){
+    return lines.map(v => ({value:v, label:v}));
+  }
+
+  const delim = detectDelimiter(first);
+  const firstCols = parseDelimitedLine(first, delim).map(s=>s.trim());
+  const looksLikeHeader = firstCols.some(c => ["value","label","symbol","name"].includes(c.toLowerCase()));
+
+  let start = 0;
+  let idxValue = 0, idxLabel = 1;
+
+  if(looksLikeHeader){
+    idxValue = firstCols.findIndex(c => c.toLowerCase()==="value" || c.toLowerCase()==="symbol" || c.toLowerCase()==="name");
+    idxLabel = firstCols.findIndex(c => c.toLowerCase()==="label");
+    if(idxValue<0) idxValue=0;
+    if(idxLabel<0) idxLabel=idxValue;
+    start = 1;
+  }
+
+  const out=[];
+  for(let i=start;i<lines.length;i++){
+    const cols = parseDelimitedLine(lines[i], delim).map(s=>s.trim());
+    if(!cols || cols.length===0) continue;
+    const value = (cols[idxValue]||"").trim();
+    if(!value) continue;
+    const label = (cols[idxLabel]||value).trim() || value;
+    out.push({value, label});
   }
   return out;
 }
@@ -296,8 +316,8 @@ function parseChartList(text){
 const OHLC_FIELDS = ["始値","高値","安値","終値"];
 const OHLC_RE = /(始値|高値|安値|終値)$/;
 
-let chartMode = "line";   // "line" | "candle"
-let symbolMeta = null;    // { allNames:Set, candleBaseSet:Set, baseToFields:Map }
+let chartMode = "line";
+let symbolMeta = null;
 
 function splitOhlcName(name){
   const m = String(name||"").match(OHLC_RE);
@@ -307,7 +327,7 @@ function splitOhlcName(name){
 
 function buildSymbolMeta(rows){
   const allNames = new Set();
-  const baseToFields = new Map(); // base -> Set(fields)
+  const baseToFields = new Map();
   for(const r of rows || []){
     if(!r || !r.name) continue;
     allNames.add(r.name);
@@ -333,28 +353,44 @@ function populateSymbolSelect(){
 
   sel.innerHTML = "";
 
-  // chartlist.csv がある場合は、その順序・銘柄に限定する
   if(Array.isArray(chartListItems) && chartListItems.length>0){
     const added = new Set();
     for(const item of chartListItems){
-      const value = item?.value; // 2502アサヒ
-      const label = item?.label ?? value; // 2502,アサヒ
+      const value = item?.value;
+      const label = item?.label ?? value;
       if(!value) continue;
 
-      // Accept if (a) candle base exists, or (b) raw name exists.
       const ok = symbolMeta.candleBaseSet.has(value) || symbolMeta.allNames.has(value);
-      if(!ok) continue;
+
+      if(!ok){
+        const sp = splitOhlcName(value);
+        if(sp.field && symbolMeta.candleBaseSet.has(sp.base)){
+          if(!added.has(sp.base)){
+            const opt = document.createElement('option');
+            opt.value = sp.base;
+            // 表示は「value,label」形式
+            opt.textContent = value + "," + label;
+            opt.setAttribute('data-display', value + " " + label.replace(/^,/, ''));
+            sel.appendChild(opt);
+            added.add(sp.base);
+          }
+        }
+        continue;
+      }
 
       if(added.has(value)) continue;
       const opt = document.createElement('option');
-      opt.value = value;         // 内部値: 2502アサヒ
-      opt.textContent = label;   // 表示:   2502,アサヒ
+      opt.value = value;
+      // 表示は「value,label」形式
+      opt.textContent = value + "," + label;
+      opt.setAttribute('data-display', value + " " + label.replace(/^,/, ''));
       sel.appendChild(opt);
       added.add(value);
     }
 
-    if(sel.options.length>0){
-      // Restore selection if possible; otherwise pick first.
+    if(sel.options.length===0){
+      console.warn("chartlist.csv の銘柄が PtoCSV_long.csv に見つからなかったため、自動列挙にフォールバックします。");
+    }else{
       if(current && Array.from(sel.options).some(o=>o.value===current)){
         sel.value = current;
       }else{
@@ -362,10 +398,8 @@ function populateSymbolSelect(){
       }
       return;
     }
-    // もし0件になった場合のみ従来フォールバック（chartlist.csv は任意扱いのまま）
   }
 
-  // Fallback: auto enumerate
   const candleBases = Array.from(symbolMeta.candleBaseSet).sort((a,b)=>String(a).localeCompare(String(b)));
   const names = Array.from(symbolMeta.allNames).sort((a,b)=>String(a).localeCompare(String(b)));
 
@@ -373,12 +407,14 @@ function populateSymbolSelect(){
     const opt = document.createElement('option');
     opt.value = b;
     opt.textContent = b;
+    opt.setAttribute('data-display', b);
     sel.appendChild(opt);
   }
   for(const n of names){
     const opt = document.createElement('option');
     opt.value = n;
     opt.textContent = n;
+    opt.setAttribute('data-display', n);
     sel.appendChild(opt);
   }
 
@@ -388,7 +424,7 @@ function populateSymbolSelect(){
 }
 
 function buildLineSeriesFromLong(rows, targetName){
-  const map=new Map(); // date -> value (latest wins)
+  const map=new Map();
   for(const r of rows) if(r.name===targetName) map.set(r.date, r.value);
 
   const dates=Array.from(map.keys()).sort((a,b)=>{
@@ -411,7 +447,7 @@ function buildOhlcSeriesFromLong(rows, baseName){
     close:baseName + "終値"
   };
 
-  const byDate = new Map(); // date -> {open,high,low,close}
+  const byDate = new Map();
   for(const r of rows || []){
     if(!r || !r.date) continue;
     if(r.name!==names.open && r.name!==names.high && r.name!==names.low && r.name!==names.close) continue;
@@ -433,9 +469,6 @@ function buildOhlcSeriesFromLong(rows, baseName){
   return dates.map(d => byDate.get(d));
 }
 
-/* =========================
-   Indicators
-========================= */
 function calculateMA(data, period){
   const result=new Array(data.length).fill(null);
   for(let i=period-1;i<data.length;i++){
@@ -545,9 +578,6 @@ function recomputeIndicators(){
   indicators.macd = calculateMACD(series, params.macdShort, params.macdLong, params.macdSignal);
 }
 
-/* =========================
-   View window build (pads)
-========================= */
 function clampView(){
   if(!series || series.length===0){
     displayCount = Math.max(10, displayCount);
@@ -602,9 +632,6 @@ function updateViewInfo(){
   el.textContent = `表示本数: ${displayCount} / 表示範囲: ${startDate&&endDate ? `${startDate} ~ ${endDate}` : '-'}`;
 }
 
-/* =========================
-   Auto load
-========================= */
 async function autoLoadChartListFile(){
   try{
     const res = await fetch('./chartlist.csv', {cache:'no-store'});
@@ -640,37 +667,39 @@ async function autoLoadLongFile(){
 }
 
 function applySymbol(){
-  const raw = document.getElementById('symbolSelect')?.value || "日経平均";
+  const sel = document.getElementById('symbolSelect');
+  const raw = sel?.value || (Array.isArray(chartListItems)&&chartListItems.length>0 ? chartListItems[0].value : "日経平均");
+  
+  // 選択されたオプションのdata-display属性から表示名を取得
+  const selectedOption = sel?.selectedOptions?.[0];
+  currentSymbolDisplay = selectedOption?.getAttribute('data-display') || raw;
+  
   if(!symbolMeta) symbolMeta = buildSymbolMeta(longRows);
 
   let label = raw;
+  let base = null;
 
-  // decide mode
   const sp = splitOhlcName(raw);
   if(sp.field && symbolMeta.candleBaseSet.has(sp.base)){
     chartMode = "candle";
+    base = sp.base;
     label = sp.base;
     series = buildOhlcSeriesFromLong(longRows, sp.base);
   }else if(symbolMeta.candleBaseSet.has(raw)){
     chartMode = "candle";
+    base = raw;
     label = raw;
     series = buildOhlcSeriesFromLong(longRows, raw);
   }else{
     chartMode = "line";
+    base = null;
     series = buildLineSeriesFromLong(longRows, raw);
   }
 
-  // 初回（or 銘柄変更）は offset を最新に寄せる
   offsetX = 0;
 
-  // クイックが選ばれていればそれを反映、なければ現状displayCountを維持（ただし上限調整）
   const q = document.getElementById('quickSelect')?.value;
   if(q) displayCount = parseInt(q, 10);
-
-  // 選択表示文字（プルダウン表示）を保持：例 "2502,アサヒ"
-  const selEl = document.getElementById('symbolSelect');
-  const optText = selEl?.selectedOptions?.[0]?.textContent || raw || "";
-  selectedSymbolDisplayText = String(optText);
 
   recomputeIndicators();
 
@@ -686,9 +715,6 @@ function applySymbol(){
   drawChart();
 }
 
-/* =========================
-   Drawing
-========================= */
 function drawChart(){
   if(!mainCanvas) return;
 
@@ -720,19 +746,6 @@ function drawMain(visibleCandles, visibleIndices){
 
   ctx.clearRect(0,0,w,h);
 
-  // ローソク足表示時、左上に「2502アサヒ」（","除去）を大きめ表示
-  if(chartMode === "candle" && selectedSymbolDisplayText){
-    const titleText = selectedSymbolDisplayText.replace(/,/g, '');
-    ctx.save();
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(titleText, pad.l + 6, pad.t + 4);
-    ctx.restore();
-  }
-
-  // min/max from visible prices and MA lines
   let minP=Infinity, maxP=-Infinity;
 
   visibleIndices.forEach((sIdx, i)=>{
@@ -767,7 +780,6 @@ function drawMain(visibleCandles, visibleIndices){
   const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
   const getY=(val)=>pad.t+chartH-(val-minP)*scaleY;
 
-  // grid
   ctx.strokeStyle='#eee'; ctx.lineWidth=1;
   const gridSteps=5;
   for(let i=0;i<=gridSteps;i++){
@@ -778,7 +790,6 @@ function drawMain(visibleCandles, visibleIndices){
     ctx.fillText(price.toFixed(0), w-pad.r+5, y+4);
   }
 
-  // candle positions for tooltip/crosshair mapping
   mainCanvas.candlePositions = visibleCandles.map((c, i)=>({
     x: getX(i),
     w: chartW/visibleCandles.length,
@@ -786,7 +797,6 @@ function drawMain(visibleCandles, visibleIndices){
     seriesIndex: visibleIndices[i]
   }));
 
-  // x-axis dates
   visibleCandles.forEach((c,i)=>{
     if(c.date && i % Math.ceil(visibleCandles.length/6)===0){
       ctx.fillStyle='#999';
@@ -811,14 +821,12 @@ function drawMain(visibleCandles, visibleIndices){
       const up = c.close >= c.open;
       const col = up ? '#26a69a' : '#ef5350';
 
-      // wick
       ctx.strokeStyle=col;
       ctx.beginPath();
       ctx.moveTo(x, yH);
       ctx.lineTo(x, yL);
       ctx.stroke();
 
-      // body
       const top = Math.min(yO, yC);
       const bot = Math.max(yO, yC);
       const height = Math.max(1, bot-top);
@@ -826,13 +834,11 @@ function drawMain(visibleCandles, visibleIndices){
       ctx.fillStyle=col;
       ctx.fillRect(x - bodyW/2, top, bodyW, height);
 
-      // outline
       ctx.strokeStyle=col;
       ctx.strokeRect(x - bodyW/2, top, bodyW, height);
     });
 
   }else{
-    // close line
     ctx.strokeStyle='#333'; ctx.lineWidth=1.8;
     ctx.beginPath();
     let moved=false;
@@ -844,7 +850,6 @@ function drawMain(visibleCandles, visibleIndices){
     ctx.stroke();
   }
 
-  // MA lines
   const drawLine = (arr, color) => {
     ctx.strokeStyle=color; ctx.lineWidth=1.5;
     ctx.beginPath();
@@ -863,6 +868,17 @@ function drawMain(visibleCandles, visibleIndices){
   };
   drawLine(indicators.ma1, '#ff9800');
   drawLine(indicators.ma2, '#2196f3');
+
+  // 左上に銘柄名を大きめフォントで表示
+  if(currentSymbolDisplay){
+    ctx.save();
+    ctx.fillStyle='#333';
+    ctx.font='bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.textAlign='left';
+    ctx.textBaseline='top';
+    ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
+    ctx.restore();
+  }
 }
 
 function drawMacd(visibleIndices){
@@ -1009,9 +1025,6 @@ function drawRsi(visibleIndices){
   ctx.fillText(`RSI(${params.rsi})`, 5, 10);
 }
 
-/* =========================
-   Crosshair + Tooltip
-========================= */
 function drawCrosshair(x){
   restoreBackBuffers();
   if(x<0) return;
@@ -1081,14 +1094,12 @@ function handleTooltip(e, canvas){
   drawCrosshair(p.x);
 }
 
-/* =========================
-   Interaction: wheel zoom (±1), drag pan
-========================= */
 function onWheelZoom(e){
   e.preventDefault();
   if(!series || series.length===0) return;
 
   const shrink = (e.deltaY < 0);
+
   displayCount += (shrink ? -1 : +1);
 
   clampView();
@@ -1112,7 +1123,7 @@ function onMouseMove(e, cvs){
 
   if(isDragging){
     const rect = cvs.getBoundingClientRect();
-    const w = rect.width - 100; // 右側余白概算（原本のまま）
+    const w = rect.width - 100;
     const diffX = e.clientX - dragStartX;
     const ppc = Math.max(1, w / displayCount);
     const candleMove = diffX / ppc;
@@ -1138,9 +1149,6 @@ function onMouseLeave(){
   drawCrosshair(-1);
 }
 
-/* =========================
-   Indicator panel ops
-========================= */
 function toggleIndicator(key){
   collapsed[key]=!collapsed[key];
   const wrapper=document.getElementById(key+'Wrapper');
@@ -1161,9 +1169,6 @@ function moveIndicator(key, dir){
   setTimeout(resizeCanvas, 0);
 }
 
-/* =========================
-   Init / Resize / UI
-========================= */
 function resizeCanvas(){
   resetBackBuffers();
   const resize=(c)=>{
@@ -1176,7 +1181,6 @@ function resizeCanvas(){
 }
 
 function setupEventListeners(){
-  // modal
   const helpBtn=document.getElementById('helpBtn');
   const helpModal=document.getElementById('helpModal');
   const helpCloseBtn=document.getElementById('helpCloseBtn');
@@ -1199,7 +1203,6 @@ function setupEventListeners(){
     drawChart();
   });
 
-  // indicator param changes
   const inputs=document.querySelectorAll('.param-group input');
   inputs.forEach(inp=>{
     inp.addEventListener('change', e=>{
