@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>株価チャート（自動読込・ロング形式・ホイール可変・ドラッグ移動）</title>
+  <title>225爆速チャートくん</title>
   <style>
     body { margin: 0; padding: 1rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #333; }
     .container { max-width: 1200px; margin: 0 auto; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
@@ -53,8 +53,8 @@
 
 <div class="container">
   <div class="title-row">
-    <h1>株価チャート</h1>
-    <button id="helpBtn" class="help-btn" type="button">使い方</button>
+    <h1>爆速チャートくん</h1>
+    <button id="helpBtn" class="help-btn" type="button">説明</button>
   </div>
 
   <div class="controls-row" style="margin-top:15px;">
@@ -66,7 +66,7 @@
     </div>
 
     <div class="param-group">
-      <label>クイック</label>
+      <label>期間変更</label>
       <select id="quickSelect" title="表示本数を即変更">
         <option value="">-</option>
         <option value="20">20</option>
@@ -83,7 +83,7 @@
 
   <div class="controls-row">
     <span class="hint" id="viewInfo">表示本数: - / 表示範囲: -</span>
-    <span class="hint" style="margin-left:auto;">ホイール: 前=縮める(−1) / 後=広げる(+1) ・ ドラッグ: 左右に移動</span>
+    <span class="hint" style="margin-left:auto;">銘柄選択は矢印ボタンで高速切り替え、ホイール拡大縮小、ドラッグ左右移動</span>
   </div>
 
   <div class="controls-row">
@@ -98,7 +98,7 @@
   </div>
 
   <div class="legend">
-    <div class="legend-item"><div class="legend-color" style="background:#333"></div><span id="priceLegend">終値（折れ線）</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:#333"></div><span>価格（ローソク足）</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
     <div class="legend-item"><div class="legend-color" style="background:#9c27b0"></div>RSI</div>
@@ -174,15 +174,13 @@
       <button id="helpCloseBtn" class="modal-close" type="button">閉じる</button>
     </div>
     <div class="modal-body">
-- 同一フォルダの「combined_long.csv」を起動時に自動読込します（タブ/カンマ自動判定）。
-- （任意）同一フォルダの「chartlist.csv」があれば、プルダウン銘柄をその順序・銘柄に限定します（1列=銘柄名、または value,label の2列）。
-- ロング形式: 日付 / 曜日 / 日種類 / 商品名 / 数値
-- マウスホイール: 1日単位で可変（前に回す=表示日数を縮める / 後ろに回す=表示日数を広げる）
-- ドラッグ: 表示範囲を左右に移動（最新から過去へ）
-- データが足りない分は左側を空白（null）表示
-
-注意:
-- file:// 直開きだと fetch がブロックされることがあります。http-server 等で http://127.0.0.1:8000/ から開いてください。
+- 平日18時頃に自動更新。
+- 銘柄選択は左右矢印で高速切り替え、ホイール拡大縮小、ドラッグ左右移動
+- 銘柄選択は矢印ボタンで高速切り替え。左右＝1ずつ、上下＝10ずつ。
+- ホイール拡大縮小、ドラッグ左右移動
+- 最初に全データを読み込むことで爆速表示を実現！静的サイトなのに銘柄切り替えが可能。
+- テクニカル指標は表示・非表示・場所入れ替えが可能。数値変更で動的描写。
+- JPXAPI→個別CSV→ロングCSVにまとめ→HTMLブラウザアプリで表示。
     </div>
   </div>
 </div>
@@ -249,7 +247,7 @@ function restoreBackBuffers(){
    現在選択中の銘柄情報
 ========================= */
 let currentSymbolDisplay = "";
-let rightSpaceEnabled = true; // 右スペースを追加するかどうか
+let rightSpaceEnabled = false;
 
 /* =========================
    Parsing (TSV/CSV)
@@ -698,7 +696,9 @@ async function autoLoadLongFile(){
 
 function applySymbol(){
   const sel = document.getElementById('symbolSelect');
-  const raw = sel?.value || (Array.isArray(chartListItems)&&chartListItems.length>0 ? chartListItems[0].value : "日経平均");
+  const raw = sel?.value || (Array.isArray(chartListItems)&&chartListItems.length>0 ? chartListItems[0].value : "");
+  
+  if(!raw) return;
   
   // 選択されたオプションのdata-display属性から表示名を取得
   const selectedOption = sel?.selectedOptions?.[0];
@@ -735,11 +735,8 @@ function applySymbol(){
 
   document.getElementById('status').textContent =
     (series.length>0)
-      ? `${label}: 実データ${series.length}件 / 表示:${chartMode==="candle" ? "ローソク足" : "折れ線"}`
+      ? `${label}: 実データ${series.length}件`
       : `${label}: データなし`;
-
-  const leg = document.getElementById('priceLegend');
-  if(leg) leg.textContent = (chartMode==="candle") ? "価格（ローソク足）" : "終値（折れ線）";
 
   updateViewInfo();
   drawChart();
@@ -1396,5 +1393,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
-
