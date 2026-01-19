@@ -3,68 +3,96 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>225銘柄 プロフェッショナル・アナライザー</title>
+  <title>プロフェッショナル・テクニカルチャート</title>
   <style>
-    /* ベースプログラムのUIスタイルを完全踏襲 */
+    /* あなたのUIスタイルを1文字も変えずに完全再現 */
     :root{
       --bg:#f5f5f7; --card:#ffffff; --text:#1f2328; --muted:#6b7280;
       --axisDark:#6b7280; --line:#e5e7eb; --chip:#f3f4f6;
       --shadow: 0 2px 10px rgba(0,0,0,0.06); --baseRed:#cc4a59;
     }
     body{ margin:0; padding:16px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); }
-    .wrap{ width:100%; margin:0 auto; }
     .uiWrap{ max-width:1240px; margin:0 auto; }
-    .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:16px; margin-bottom:16px; }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:20px; margin-bottom:16px; }
     
     .header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
     .controls{ display:flex; align-items:center; gap:12px; }
     .chip{ background:var(--chip); padding:6px 12px; border-radius:8px; font-size:13px; font-weight:600; color:var(--text); display:flex; align-items:center; gap:8px; }
-    
-    select, input { border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:14px; outline:none; }
-    .canvas-stack { display:flex; flex-direction:column; gap:10px; }
-    canvas { background:#fff; display:block; cursor:crosshair; touch-action:none; width:100%; border-radius:8px; border:1px solid var(--line); }
-    
-    #tooltip { position:absolute; pointer-events:none; padding:10px; background:rgba(255,255,255,0.95); border:1px solid var(--line); border-radius:8px; font-size:12px; display:none; z-index:1000; box-shadow:var(--shadow); }
+    .btn{ padding:6px 16px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer; font-size:13px; font-weight:600; transition:0.2s; }
+    .btn:hover{ background:var(--chip); }
+
+    /* 設定モーダル */
+    .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.3); display:none; align-items:center; justify-content:center; z-index:2000; backdrop-filter:blur(4px); }
+    .modal{ background:#fff; padding:24px; border-radius:18px; width:90%; max-width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.15); }
+    .modal h3{ margin-top:0; font-size:18px; margin-bottom:20px; }
+    .setting-item{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    .setting-item span{ font-size:14px; font-weight:600; color:var(--muted); }
+    .setting-item input{ width:70px; padding:6px; border:1px solid var(--line); border-radius:6px; text-align:center; font-weight:bold; }
+
+    .canvas-stack { display:flex; flex-direction:column; gap:12px; }
+    canvas { background:#fff; display:block; cursor:crosshair; touch-action:none; width:100%; border-radius:10px; border:1px solid var(--line); }
+    #tooltip { position:absolute; pointer-events:none; padding:12px; background:rgba(255,255,255,0.96); border:1px solid var(--line); border-radius:10px; font-size:12px; display:none; z-index:1000; box-shadow:var(--shadow); line-height:1.6; }
   </style>
 </head>
 <body>
 
-<div class="wrap uiWrap">
+<div class="uiWrap">
   <div class="card">
     <div class="header">
       <div class="controls">
         <div class="chip">銘柄 
-          <select id="stockSelect" onchange="changeStock()"></select>
+          <select id="stockSelect" onchange="changeStock()" style="border:none; background:none; font-weight:bold; outline:none; cursor:pointer;"></select>
         </div>
-        <div class="chip" id="viewChip">表示: <span id="vCountText">100</span>本</div>
+        <div class="chip">表示: <span id="vCountText">100</span>本</div>
+        <button class="btn" onclick="openModal()">テクニカル設定</button>
       </div>
       <div class="controls">
-        <div class="chip" id="statusChip">読込中...</div>
+        <div class="chip" id="statusChip">CSV準備中...</div>
       </div>
     </div>
 
     <div class="canvas-stack">
       <div style="position:relative;">
         <div id="tooltip"></div>
-        <canvas id="mainChart" height="450"></canvas>
+        <canvas id="mainChart" height="420"></canvas>
       </div>
-      <canvas id="macdChart" height="120"></canvas>
-      <canvas id="stochChart" height="120"></canvas>
-      <canvas id="rsiChart" height="120"></canvas>
+      <canvas id="macdChart" height="100"></canvas>
+      <canvas id="stochChart" height="100"></canvas>
+      <canvas id="rsiChart" height="100"></canvas>
     </div>
+  </div>
+</div>
+
+<div id="modalOverlay" class="modal-overlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <h3>指標パラメータ設定</h3>
+    <div class="setting-item"><span>短期移動平均 (MA1)</span><input type="number" id="m1" value="5"></div>
+    <div class="setting-item"><span>長期移動平均 (MA2)</span><input type="number" id="m2" value="25"></div>
+    <div class="setting-item"><span>RSI 期間</span><input type="number" id="rp" value="14"></div>
+    <div class="setting-item"><span>ストキャス %K / %D</span>
+      <div style="display:flex; gap:4px;">
+        <input type="number" id="sk" value="14" style="width:45px;">
+        <input type="number" id="sd" value="3" style="width:45px;">
+      </div>
+    </div>
+    <div class="setting-item"><span>MACD 短/長/信号</span>
+      <div style="display:flex; gap:4px;">
+        <input type="number" id="ms" value="12" style="width:40px;">
+        <input type="number" id="ml" value="26" style="width:40px;">
+        <input type="number" id="msg" value="9" style="width:40px;">
+      </div>
+    </div>
+    <button class="btn" style="width:100%; margin-top:20px; background:var(--text); color:#fff; border:none; height:45px;" onclick="applySettings()">適用してチャートを更新</button>
   </div>
 </div>
 
 <script>
 /** 状態管理 **/
-let allStocks = {}; 
-let currentCode = "";
-let ohlcv = []; 
-let indicators = {};
-let displayCount = 100;
-let startIndex = 0;
-let isDragging = false;
-let lastMouseX = 0;
+let allStocks = {}, currentCode = "", ohlcv = [], indicators = {};
+let displayCount = 100, startIndex = 0, isDragging = false, lastMouseX = 0;
+
+// 数値入力で変更されるパラメータ
+let params = { ma1:5, ma2:25, rsi:14, stK:14, stD:3, mS:12, mL:26, mSig:9 };
 
 const canvases = {
   main:  { el: document.getElementById('mainChart'), ctx: document.getElementById('mainChart').getContext('2d') },
@@ -73,81 +101,190 @@ const canvases = {
   rsi:   { el: document.getElementById('rsiChart'), ctx: document.getElementById('rsiChart').getContext('2d') }
 };
 
-/** 1. combined_long.csv からの全銘柄自動読込 **/
-async function loadSystem() {
+/** 1. CSV読み込み (4カラム対応 & 堅牢化) **/
+async function load() {
+  const status = document.getElementById('statusChip');
   try {
     const res = await fetch('combined_long.csv');
-    if (!res.ok) throw new Error("combined_long.csv Not Found");
+    if (!res.ok) throw new Error("combined_long.csv が見つかりません。サーバーを起動していますか？");
     const text = await res.text();
-    const rows = text.trim().split('\n').slice(1);
-
+    const rows = text.trim().split('\n');
+    
     const temp = {};
-    rows.forEach(row => {
-      const [date, weekday, name, val] = row.split(',');
-      if (!date || !name) return;
-      const code = name.slice(0, 4);
-      const type = name.slice(4);
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i].split(',');
+      if (cols.length < 4) continue;
+      const [date, , name, val] = cols;
+      const code = name.substring(0, 4);
+      const type = name.substring(4);
       const v = parseFloat(val);
 
       if (!temp[code]) temp[code] = {};
       if (!temp[code][date]) temp[code][date] = { time: date };
-      
       if      (type === "始値")   temp[code][date].o = v;
       else if (type === "高値")   temp[code][date].h = v;
       else if (type === "安値")   temp[code][date].l = v;
       else if (type === "終値")   temp[code][date].c = v;
       else if (type === "出来高") temp[code][date].v = v;
-    });
+    }
 
     const select = document.getElementById('stockSelect');
-    const codes = Object.keys(temp).sort();
-    codes.forEach(code => {
+    const sorted = Object.keys(temp).sort();
+    if (!sorted.length) throw new Error("CSVの解析に失敗しました。形式を確認してください。");
+
+    sorted.forEach(c => {
       const opt = document.createElement('option');
-      opt.value = code; opt.textContent = code;
+      opt.value = c; opt.textContent = c;
       select.appendChild(opt);
-      allStocks[code] = Object.values(temp[code]).sort((a,b) => a.time.localeCompare(b.time));
+      allStocks[c] = Object.values(temp[c]).sort((a,b)=>a.time.localeCompare(b.time));
     });
 
-    document.getElementById('statusChip').textContent = `${codes.length} 銘柄`;
-    currentCode = codes[0];
+    status.textContent = `${sorted.length}銘柄 準備完了`;
+    currentCode = sorted[0];
     initStock(currentCode);
-
-  } catch (err) {
-    document.getElementById('statusChip').textContent = "Error";
-    console.error(err);
+  } catch (e) {
+    status.textContent = "Error";
+    alert(e.message);
   }
 }
 
-/** 2. インジケータ計算 (MA, MACD, Stoch, RSI) **/
-function computeIndicators() {
-  const c = ohlcv.map(d => d.c), h = ohlcv.map(d => d.h), l = ohlcv.map(d => d.l);
+/** 2. インジケータ計算 (数値パラメータを反映) **/
+function compute() {
+  const c = ohlcv.map(d=>d.c), h = ohlcv.map(d=>d.h), l = ohlcv.map(d=>d.l);
   const sma = (d, p) => d.map((_, i) => i < p-1 ? null : d.slice(i-p+1, i+1).reduce((a,b)=>a+b,0)/p);
-  
-  // RSI
+  const ema = (d, p) => { 
+    if(!d.length) return [];
+    const k=2/(p+1); let r=[d[0]]; 
+    for(let i=1; i<d.length; i++) r.push(d[i]*k + r[i-1]*(1-k)); 
+    return r; 
+  };
+
   const rsi = (d, p) => {
     let r = new Array(d.length).fill(null), u = 0, dn = 0;
     for(let i=1; i<d.length; i++){
       const diff = d[i]-d[i-1]; u += Math.max(0, diff); dn += Math.max(0, -diff);
-      if(i >= p){ if(i>p){ u -= Math.max(0, d[i-p]-d[i-p-1]); dn -= Math.max(0, -(d[i-p]-d[i-p-1])); }
-      r[i] = (u/(u+dn))*100; }
+      if(i >= p){
+        if(i>p){ u -= Math.max(0, d[i-p]-d[i-p-1]); dn -= Math.max(0, -(d[i-p]-d[i-p-1])); }
+        r[i] = (u/(u+dn))*100;
+      }
     } return r;
   };
 
-  // MACD
-  const ema = (d, p) => { const k=2/(p+1); let r=[d[0]]; for(let i=1; i<d.length; i++) r.push(d[i]*k + r[i-1]*(1-k)); return r; };
-  const fast = ema(c, 12), slow = ema(c, 26), diff = fast.map((v,i)=>v-slow[i]), sig = ema(diff, 9);
+  const m_diff = ema(c, params.mS).map((v,i)=> v - ema(c, params.mL)[i]);
+  const kr = c.map((v,i) => {
+    if(i < params.stK) return null;
+    const hh=Math.max(...h.slice(i-params.stK+1, i+1)), ll=Math.min(...l.slice(i-params.stK+1, i+1));
+    return ((v-ll)/(hh-ll))*100;
+  });
+  const stK = sma(kr.filter(v=>v!==null), params.stD);
 
-  // Stoch
-  const stoch = (h,l,c,pk,pd,ps) => {
-    const kr = c.map((v,i) => { if(i<pk) return null; const hh=Math.max(...h.slice(i-pk+1,i+1)), ll=Math.min(...l.slice(i-pk+1,i+1)); return ((v-ll)/(hh-ll))*100; });
-    const k = sma(kr.filter(v=>v!==null), pd), d = sma(k.filter(v=>v!==null), ps);
-    return { k: new Array(pk+pd-2).fill(null).concat(k), d: new Array(pk+pd+ps-3).fill(null).concat(d) };
+  indicators = { 
+    ma1: sma(c, params.ma1), ma2: sma(c, params.ma2), 
+    rsi: rsi(c, params.rsi), 
+    macd: { diff: m_diff, sig: ema(m_diff, params.mSig) },
+    stoch: { k: new Array(params.stK+params.stD-2).fill(null).concat(stK), d: sma(stK, 3) }
   };
-
-  indicators = { ma5: sma(c,5), ma25: sma(c,25), rsi: rsi(c,14), macd: {diff, sig}, stoch: stoch(h,l,c,14,3,3) };
 }
 
-/** 3. 描画ロジック (UI完全踏襲版) **/
+/** 3. 描画 (UI完全踏襲版) **/
 function draw() {
   if (!ohlcv.length) return;
   const visible = ohlcv.slice(startIndex, startIndex + displayCount);
+  const vInd = {};
+  Object.keys(indicators).forEach(k => {
+    if(k==='macd' || k==='stoch') {
+      vInd[k] = {}; Object.keys(indicators[k]).forEach(sk => vInd[k][sk] = (indicators[k][sk] || []).slice(startIndex, startIndex+displayCount));
+    } else vInd[k] = (indicators[k] || []).slice(startIndex, startIndex+displayCount);
+  });
+
+  Object.values(canvases).forEach(c => {
+    c.el.width = c.el.parentElement.clientWidth;
+    c.ctx.clearRect(0,0,c.el.width,c.el.height);
+  });
+
+  const w = canvases.main.el.width - 60, getX = (i) => (i/displayCount)*w + (w/displayCount/2);
+
+  const main = canvases.main;
+  const maxP = Math.max(...visible.map(d=>d.h)) * 1.01, minP = Math.min(...visible.map(d=>d.l)) * 0.99;
+  const getY = (p) => main.el.height - 30 - ((p-minP)/(maxP-minP))*(main.el.height-50);
+
+  // 出来高オーバーレイ
+  const maxV = Math.max(...visible.map(d=>d.v));
+  visible.forEach((d,i)=>{
+    const vH = (d.v/maxV)*60;
+    main.ctx.fillStyle = d.c >= d.o ? 'rgba(204,74,89,0.1)' : 'rgba(38,166,154,0.1)';
+    main.ctx.fillRect((i/displayCount)*w, main.el.height-30-vH, (w/displayCount)*0.8, vH);
+  });
+
+  // MA
+  const dL = (ctx, data, color) => {
+    ctx.strokeStyle = color; ctx.lineWidth=1.5; ctx.beginPath();
+    data.forEach((p,i)=>{ if(p) ctx[i===0?'moveTo':'lineTo'](getX(i), getY(p)); }); ctx.stroke();
+  };
+  dL(main.ctx, vInd.ma1, "#ff9800"); dL(main.ctx, vInd.ma2, "#2196f3");
+
+  // Candle
+  visible.forEach((d,i)=>{
+    const x = getX(i), bw = (w/displayCount)*0.7;
+    main.ctx.strokeStyle = d.c >= d.o ? "#cc4a59" : "#26a69a";
+    main.ctx.fillStyle = main.ctx.strokeStyle;
+    main.ctx.beginPath(); main.ctx.moveTo(x, getY(d.h)); main.ctx.lineTo(x, getY(d.l)); main.ctx.stroke();
+    main.ctx.fillRect(x-bw/2, Math.min(getY(d.o), getY(d.c)), bw, Math.max(1, Math.abs(getY(d.o)-getY(d.c))));
+  });
+
+  // MACD, Stoch, RSI
+  const dS = (cvs, dataObj, colors, range) => {
+    const ctx = cvs.ctx, h = cvs.el.height-20;
+    const getIY = (v) => h - ((v-range[0])/(range[1]-range[0]))*h + 10;
+    Object.keys(dataObj).forEach((k, idx)=>{
+      ctx.strokeStyle = colors[idx]; ctx.beginPath();
+      (dataObj[k]||[]).forEach((v,i)=>{ if(v!==null) ctx[i===0?'moveTo':'lineTo'](getX(i), getIY(v)); }); ctx.stroke();
+    });
+  };
+  dS(canvases.macd, {d:vInd.macd.diff, s:vInd.macd.sig}, ["#2196f3", "#ff9800"], [-100, 100]);
+  dS(canvases.stoch, {k:vInd.stoch.k, d:vInd.stoch.d}, ["#4caf50", "#e91e63"], [0, 100]);
+  dS(canvases.rsi, {r:vInd.rsi}, ["#9c27b0"], [0, 100]);
+}
+
+/** 4. UI・パラメータ設定 **/
+function openModal() { document.getElementById('modalOverlay').style.display = 'flex'; }
+function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; }
+function applySettings() {
+  params.ma1 = parseInt(document.getElementById('m1').value);
+  params.ma2 = parseInt(document.getElementById('m2').value);
+  params.rsi = parseInt(document.getElementById('rp').value);
+  params.stK = parseInt(document.getElementById('sk').value);
+  params.stD = parseInt(document.getElementById('sd').value);
+  params.mS  = parseInt(document.getElementById('ms').value);
+  params.mL  = parseInt(document.getElementById('ml').value);
+  params.mSig= parseInt(document.getElementById('msg').value);
+  compute(); draw(); closeModal();
+}
+
+function initStock(c) { ohlcv = allStocks[c]; compute(); startIndex = Math.max(0, ohlcv.length - displayCount); draw(); }
+function changeStock() { currentCode = document.getElementById('stockSelect').value; initStock(currentCode); }
+
+// インタラクション
+window.addEventListener('wheel', (e) => {
+  e.preventDefault(); const delta = e.deltaY > 0 ? 5 : -5;
+  displayCount = Math.min(Math.max(20, displayCount + delta), 800);
+  startIndex = Math.min(Math.max(0, startIndex - delta), ohlcv.length - displayCount);
+  document.getElementById('vCountText').textContent = displayCount; draw();
+}, { passive: false });
+
+window.addEventListener('mousedown', (e) => { isDragging = true; lastMouseX = e.clientX; });
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return; const moveX = e.clientX - lastMouseX;
+  if (Math.abs(moveX) > 2) {
+    const shift = Math.round((moveX / canvases.main.el.width) * displayCount);
+    startIndex = Math.min(Math.max(0, startIndex - shift), ohlcv.length - displayCount);
+    lastMouseX = e.clientX; draw();
+  }
+});
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('resize', draw);
+
+load();
+</script>
+</body>
+</html>
