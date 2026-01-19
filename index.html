@@ -101,6 +101,13 @@
     <div class="legend-item"><div class="legend-color" style="background:#333"></div><span id="priceLegend">価格（ローソク足）</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
+    <div class="legend-item" style="margin-left:auto;">
+    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="checkbox" id="rightSpaceCheck" checked>
+      <span>右スペース</span>
+    </label>
+  </div>
+</div>
   </div>
 
   <canvas id="mainChart"></canvas>
@@ -238,6 +245,7 @@ function restoreBackBuffers(){
    現在選択中の銘柄情報
 ========================= */
 let currentSymbolDisplay = "";
+let rightSpaceEnabled = true; // 右スペースを追加するかどうか
 
 /* =========================
    Parsing (TSV/CSV)
@@ -607,6 +615,10 @@ function getVisibleWindow(){
   clampView();
   const n = series.length;
 
+  // 右スペースを追加する場合は5日分追加
+  const extraSpace = rightSpaceEnabled ? 5 : 0;
+  const totalDisplay = displayCount + extraSpace;
+
   const startRaw = n - displayCount - offsetX;
   const endRaw = startRaw + displayCount;
 
@@ -616,13 +628,17 @@ function getVisibleWindow(){
   const realSlice = (start < end) ? series.slice(start, end) : [];
   const realLen = realSlice.length;
 
-  const padN = displayCount - realLen;
-  const pads = new Array(padN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null}));
+  const leftPadN = displayCount - realLen;
+  const leftPads = new Array(leftPadN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null, volume:null}));
 
-  const visibleCandles = pads.concat(realSlice);
+  // 右スペース用のパディング
+  const rightPads = new Array(extraSpace).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null, volume:null}));
 
-  const visibleIndices = new Array(padN).fill(null).concat(
-    Array.from({length: realLen}, (_,i)=> start + i)
+  const visibleCandles = leftPads.concat(realSlice, rightPads);
+
+  const visibleIndices = new Array(leftPadN).fill(null).concat(
+    Array.from({length: realLen}, (_,i)=> start + i),
+    new Array(extraSpace).fill(null)
   );
 
   return { visibleCandles, visibleIndices, startSeriesIndex: start, endSeriesIndex: end };
@@ -1295,15 +1311,21 @@ document.getElementById('symbolSelect')?.addEventListener('keydown', (e)=>{
   }
 });
 
-  document.getElementById('quickSelect')?.addEventListener('change', (e)=>{
-    const v = e.target.value;
-    if(!v) return;
-    displayCount = parseInt(v, 10);
-    offsetX = 0;
-    clampView();
-    updateViewInfo();
-    drawChart();
-  });
+document.getElementById('quickSelect')?.addEventListener('change', (e)=>{
+  const v = e.target.value;
+  if(!v) return;
+  displayCount = parseInt(v, 10);
+  offsetX = 0;
+  clampView();
+  updateViewInfo();
+  drawChart();
+});
+
+// 右スペースチェックボックス
+document.getElementById('rightSpaceCheck')?.addEventListener('change', (e)=>{
+  rightSpaceEnabled = e.target.checked;
+  drawChart();
+});
 
   const inputs=document.querySelectorAll('.param-group input');
   inputs.forEach(inp=>{
@@ -1368,6 +1390,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
