@@ -43,6 +43,7 @@
     .btn-toggle { background:#666; }
     .indicator-wrapper { height:120px; transition:height 0.2s; overflow:hidden; }
     .indicator-wrapper.collapsed { height:0; }
+    .indicator-wrapper.volume { height:60px; }
     .indicator-canvas { height:100%; width:100%; }
 
     .tooltip { position:absolute; background:rgba(255,255,255,0.95); border:1px solid #999; padding:8px; border-radius:4px; font-size:12px; pointer-events:none; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:100; line-height:1.4; white-space:nowrap; }
@@ -113,6 +114,17 @@
   <canvas id="mainChart"></canvas>
 
   <div id="indicatorsList">
+    <div class="indicator-container" id="volumeContainer">
+      <div class="indicator-controls">
+        <button class="btn-icon btn-move" onclick="moveIndicator('volume','up')">▲</button>
+        <button class="btn-icon btn-move" onclick="moveIndicator('volume','down')">▼</button>
+        <button class="btn-icon btn-toggle" onclick="toggleIndicator('volume')">−</button>
+      </div>
+      <div class="indicator-wrapper volume" id="volumeWrapper">
+        <canvas class="indicator-canvas" id="volumeChart"></canvas>
+      </div>
+    </div>
+
     <div class="indicator-container" id="macdContainer">
       <div class="indicator-controls">
         <button class="btn-icon btn-move" onclick="moveIndicator('macd','up')">▲</button>
@@ -192,12 +204,13 @@ let params = {
 };
 
 let mainCanvas, mainCtx;
+let volumeCanvas, volumeCtx;
 let macdCanvas, macdCtx;
 let stochCanvas, stochCtx;
 let rsiCanvas, rsiCtx;
 let tooltip;
 
-let collapsed = { macd: false, stoch: false, rsi: false };
+let collapsed = { volume: false, macd: false, stoch: false, rsi: false };
 
 let indicators = {
   ma1: [], ma2: [],
@@ -206,11 +219,12 @@ let indicators = {
   macd: { macd: [], signal: [], hist: [] }
 };
 
-let backBuffers = { main: null, macd: null, stoch: null, rsi: null };
-function resetBackBuffers(){ backBuffers.main = backBuffers.macd = backBuffers.stoch = backBuffers.rsi = null; }
+let backBuffers = { main: null, volume: null, macd: null, stoch: null, rsi: null };
+function resetBackBuffers(){ backBuffers.main = backBuffers.volume = backBuffers.macd = backBuffers.stoch = backBuffers.rsi = null; }
 function saveBackBuffers(){
   try{
     backBuffers.main = mainCtx.getImageData(0,0,mainCanvas.width, mainCanvas.height);
+    backBuffers.volume = (!collapsed.volume) ? volumeCtx.getImageData(0,0,volumeCanvas.width, volumeCanvas.height) : null;
     backBuffers.macd = (!collapsed.macd) ? macdCtx.getImageData(0,0,macdCanvas.width, macdCanvas.height) : null;
     backBuffers.stoch = (!collapsed.stoch) ? stochCtx.getImageData(0,0,stochCanvas.width, stochCanvas.height) : null;
     backBuffers.rsi = (!collapsed.rsi) ? rsiCtx.getImageData(0,0,rsiCanvas.width, rsiCanvas.height) : null;
@@ -219,6 +233,7 @@ function saveBackBuffers(){
 function restoreBackBuffers(){
   try{
     if(backBuffers.main) mainCtx.putImageData(backBuffers.main,0,0);
+    if(!collapsed.volume && backBuffers.volume) volumeCtx.putImageData(backBuffers.volume,0,0);
     if(!collapsed.macd && backBuffers.macd) macdCtx.putImageData(backBuffers.macd,0,0);
     if(!collapsed.stoch && backBuffers.stoch) stochCtx.putImageData(backBuffers.stoch,0,0);
     if(!collapsed.rsi && backBuffers.rsi) rsiCtx.putImageData(backBuffers.rsi,0,0);
@@ -435,7 +450,7 @@ function buildLineSeriesFromLong(rows, targetName){
 
   return dates.map(d=>{
     const v=map.get(d);
-    return {date:d, open:v, high:v, low:v, close:v};
+    return {date:d, open:v, high:v, low:v, close:v, volume:null};
   });
 }
 
@@ -444,20 +459,22 @@ function buildOhlcSeriesFromLong(rows, baseName){
     open: baseName + "始値",
     high: baseName + "高値",
     low:  baseName + "安値",
-    close:baseName + "終値"
+    close:baseName + "終値",
+    volume: baseName + "出来高"
   };
 
   const byDate = new Map();
   for(const r of rows || []){
     if(!r || !r.date) continue;
-    if(r.name!==names.open && r.name!==names.high && r.name!==names.low && r.name!==names.close) continue;
+    if(r.name!==names.open && r.name!==names.high && r.name!==names.low && r.name!==names.close && r.name!==names.volume) continue;
 
-    if(!byDate.has(r.date)) byDate.set(r.date, {date:r.date, open:null, high:null, low:null, close:null});
+    if(!byDate.has(r.date)) byDate.set(r.date, {date:r.date, open:null, high:null, low:null, close:null, volume:null});
     const o = byDate.get(r.date);
     if(r.name===names.open)  o.open = r.value;
     if(r.name===names.high)  o.high = r.value;
     if(r.name===names.low)   o.low  = r.value;
     if(r.name===names.close) o.close= r.value;
+    if(r.name===names.volume) o.volume = r.value;
   }
 
   const dates = Array.from(byDate.keys()).sort((a,b)=>{
@@ -730,6 +747,7 @@ function drawChart(){
   const { visibleCandles, visibleIndices } = getVisibleWindow();
 
   drawMain(visibleCandles, visibleIndices);
+  drawVolume(visibleCandles, visibleIndices);
   drawMacd(visibleIndices);
   drawStoch(visibleIndices);
   drawRsi(visibleIndices);
@@ -879,6 +897,49 @@ function drawMain(visibleCandles, visibleIndices){
   };
   drawLine(indicators.ma1, '#ff9800');
   drawLine(indicators.ma2, '#2196f3');
+}
+
+function drawVolume(visibleCandles, visibleIndices){
+  if(collapsed.volume) return;
+  const ctx=volumeCtx;
+  const w=volumeCanvas.width, h=volumeCanvas.height;
+  const pad={t:10,b:10,l:10,r:60};
+  const chartW=w-pad.l-pad.r;
+  const chartH=h-pad.t-pad.b;
+  ctx.clearRect(0,0,w,h);
+
+  let maxVol=0;
+  visibleCandles.forEach(c=>{
+    if(c.volume!=null && c.volume>maxVol) maxVol=c.volume;
+  });
+
+  if(maxVol===0) maxVol=1;
+  const scaleY=chartH/maxVol;
+
+  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
+  const getY=(vol)=>pad.t+chartH-(vol*scaleY);
+
+  const barW=(chartW/visibleCandles.length)*0.7;
+
+  visibleCandles.forEach((c,i)=>{
+    if(c.volume==null || c.volume===0) return;
+    
+    const x=getX(i);
+    const y=getY(c.volume);
+    const y0=pad.t+chartH;
+
+    // 出来高の色: 陽線なら緑、陰線なら赤、判定不可なら灰色
+    let color='#999';
+    if(c.open!=null && c.close!=null){
+      color = c.close >= c.open ? '#26a69a' : '#ef5350';
+    }
+
+    ctx.fillStyle=color;
+    ctx.fillRect(x-barW/2, y, barW, y0-y);
+  });
+
+  ctx.fillStyle='#666'; ctx.textAlign='left';
+  ctx.fillText(`出来高`, 5, 10);
 }
 
 function drawMacd(visibleIndices){
@@ -1037,6 +1098,7 @@ function drawCrosshair(x){
     ctx.restore();
   };
   draw(mainCtx, mainCanvas.height);
+  if(!collapsed.volume) draw(volumeCtx, volumeCanvas.height);
   if(!collapsed.macd) draw(macdCtx, macdCanvas.height);
   if(!collapsed.stoch) draw(stochCtx, stochCanvas.height);
   if(!collapsed.rsi) draw(rsiCtx, rsiCanvas.height);
@@ -1077,6 +1139,9 @@ function handleTooltip(e, canvas){
     html += `始:${fmt(c.open)} 高:${fmt(c.high)} 安:${fmt(c.low)} 終:${fmt(c.close)}<br>`;
   }else{
     html += `値:${fmt(c.close)}<br>`;
+  }
+  if(c.volume!=null){
+    html += `出来高:${fmt(c.volume)}<br>`;
   }
   html += `<span style="color:#ff9800">MA${params.ma1}:${fmt(ma1)}</span> <span style="color:#2196f3">MA${params.ma2}:${fmt(ma2)}</span><br>`;
   html += `<span style="color:#9c27b0">RSI:${fmt(rsi)}</span><br>`;
@@ -1176,7 +1241,7 @@ function resizeCanvas(){
     const rect=c.getBoundingClientRect();
     c.width=rect.width; c.height=rect.height;
   };
-  resize(mainCanvas); resize(macdCanvas); resize(stochCanvas); resize(rsiCanvas);
+  resize(mainCanvas); resize(volumeCanvas); resize(macdCanvas); resize(stochCanvas); resize(rsiCanvas);
   drawChart();
 }
 
@@ -1224,7 +1289,7 @@ function setupEventListeners(){
     });
   });
 
-  const canvases=[mainCanvas, macdCanvas, stochCanvas, rsiCanvas];
+  const canvases=[mainCanvas, volumeCanvas, macdCanvas, stochCanvas, rsiCanvas];
   canvases.forEach(cvs=>{
     if(!cvs) return;
 
@@ -1242,6 +1307,9 @@ function setupEventListeners(){
 function init(){
   mainCanvas=document.getElementById('mainChart');
   mainCtx=mainCanvas.getContext('2d');
+
+  volumeCanvas=document.getElementById('volumeChart');
+  volumeCtx=volumeCanvas.getContext('2d');
 
   macdCanvas=document.getElementById('macdChart');
   macdCtx=macdCanvas.getContext('2d');
