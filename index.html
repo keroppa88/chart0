@@ -98,7 +98,7 @@
   </div>
 
   <div class="legend">
-    <div class="legend-item"><div class="legend-color" style="background:#333"></div><span id="priceLegend">終値（折れ線）</span></div>
+    <div class="legend-item"><div class="legend-color" style="background:#333"></div><span id="priceLegend">価格（ローソク足）</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
   </div>
@@ -716,9 +716,6 @@ function applySymbol(){
     (series.length>0)
       ? `${label}: 実データ${series.length}件 / 表示:${chartMode==="candle" ? "ローソク足" : "折れ線"}`
       : `${label}: データなし`;
-
-  const leg = document.getElementById('priceLegend');
-  if(leg) leg.textContent = (chartMode==="candle") ? "価格（ローソク足）" : "終値（折れ線）";
 
   updateViewInfo();
   drawChart();
@@ -1342,6 +1339,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
