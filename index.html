@@ -803,18 +803,27 @@ function drawMain(visibleCandles, visibleIndices){
   minP-=range*0.05; maxP+=range*0.05;
   const scaleY=chartH/(maxP-minP);
 
-  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
-  const getY=(val)=>pad.t+chartH-(val-minP)*scaleY;
+const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
+const getY=(val)=>pad.t+chartH-(val-minP)*scaleY;
 
-  ctx.strokeStyle='#eee'; ctx.lineWidth=1;
-  const gridSteps=5;
-  for(let i=0;i<=gridSteps;i++){
-    const y=pad.t+(chartH*i/gridSteps);
-    const price=maxP-(maxP-minP)*(i/gridSteps);
-    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
-    ctx.fillStyle='#666'; ctx.textAlign='left';
-    ctx.fillText(price.toFixed(0), w-pad.r+5, y+4);
-  }
+// 価格を適切な単位で丸める関数
+const roundPrice = (price) => {
+  if(price < 1000) return Math.round(price / 10) * 10;
+  if(price < 3000) return Math.round(price / 50) * 50;
+  if(price < 5000) return Math.round(price / 100) * 100;
+  return Math.round(price / 500) * 500;
+};
+
+ctx.strokeStyle='#eee'; ctx.lineWidth=1;
+const gridSteps=5;
+for(let i=0;i<=gridSteps;i++){
+  const y=pad.t+(chartH*i/gridSteps);
+  const rawPrice=maxP-(maxP-minP)*(i/gridSteps);
+  const price=roundPrice(rawPrice);
+  ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+  ctx.fillStyle='#666'; ctx.textAlign='left';
+  ctx.fillText(price.toLocaleString(), w-pad.r+5, y+4);
+}
 
   mainCanvas.candlePositions = visibleCandles.map((c, i)=>({
     x: getX(i),
@@ -1338,4 +1347,5 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
