@@ -38,7 +38,6 @@ async function appendDailyData(code) {
             
             const currentContent = fs.readFileSync(filePath, 'utf-8');
             if (!currentContent.includes(d.Date)) {
-                // 既存ファイルの最終行に改行がない場合は先頭に追加
                 const needsNewline = !currentContent.endsWith('\n');
                 const newLine = (needsNewline ? '\n' : '') + `${d.Date},${d.AdjO ?? d.O},${d.AdjH ?? d.H},${d.AdjL ?? d.L},${d.AdjC ?? d.C},${d.AdjVo ?? d.Vo}\n`;
                 
