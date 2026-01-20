@@ -1193,7 +1193,16 @@ function drawMain(visibleCandles, visibleIndices){
   const datePositions = []; // 日付を表示する位置を記録
   const dateLabels = []; // 表示する日付テキスト
   
-  if(showMonthStart && timeframe !== 'monthly'){
+  if(timeframe === 'monthly'){
+    // 月足の場合は常にYYYY-MM形式で表示
+    visibleCandles.forEach((c, i) => {
+      if(!c.date) return;
+      const dateObj = new Date(c.date);
+      const yearMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+      datePositions.push(i);
+      dateLabels.push(yearMonth);
+    });
+  }else if(showMonthStart){
     // 月初（またはその月の最初の営業日）を表示
     let lastMonth = null;
     const allMonthPositions = [];
