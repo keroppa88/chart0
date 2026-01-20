@@ -36,10 +36,12 @@ async function appendDailyData(code) {
             const d = json.data[0];
             const filePath = path.join(DATA_DIR, `${code}.csv`);
             
-            const newLine = `${d.Date},${d.AdjO ?? d.O},${d.AdjH ?? d.H},${d.AdjL ?? d.L},${d.AdjC ?? d.C},${d.AdjVo ?? d.Vo}\n`;
-            
             const currentContent = fs.readFileSync(filePath, 'utf-8');
             if (!currentContent.includes(d.Date)) {
+                // 既存ファイルの最終行に改行がない場合は先頭に追加
+                const needsNewline = !currentContent.endsWith('\n');
+                const newLine = (needsNewline ? '\n' : '') + `${d.Date},${d.AdjO ?? d.O},${d.AdjH ?? d.H},${d.AdjL ?? d.L},${d.AdjC ?? d.C},${d.AdjVo ?? d.Vo}\n`;
+                
                 fs.appendFileSync(filePath, newLine);
                 console.log(`✅ ${code}: 追記完了`);
             } else {
