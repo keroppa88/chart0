@@ -1195,13 +1195,34 @@ function drawMain(visibleCandles, visibleIndices){
   
   if(timeframe === 'monthly'){
     // 月足の場合は常にYYYY-MM形式で表示
+    const allMonthPositions = [];
+    const allMonthLabels = [];
+    
     visibleCandles.forEach((c, i) => {
       if(!c.date) return;
       const dateObj = new Date(c.date);
       const yearMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-      datePositions.push(i);
-      dateLabels.push(yearMonth);
+      allMonthPositions.push(i);
+      allMonthLabels.push(yearMonth);
     });
+    
+    // 20個を超える場合は2ヶ月ごとに間引く
+    if(allMonthPositions.length > 20){
+      // 直近（最後）の月は必ず表示
+      const lastIdx = allMonthPositions.length - 1;
+      datePositions.push(allMonthPositions[lastIdx]);
+      dateLabels.push(allMonthLabels[lastIdx]);
+      
+      // そこから遡って2ヶ月ごとに表示
+      for(let i = lastIdx - 2; i >= 0; i -= 2){
+        datePositions.unshift(allMonthPositions[i]);
+        dateLabels.unshift(allMonthLabels[i]);
+      }
+    }else{
+      // 20個以下ならすべて表示
+      datePositions.push(...allMonthPositions);
+      dateLabels.push(...allMonthLabels);
+    }
   }else if(showMonthStart){
     // 月初（またはその月の最初の営業日）を表示
     let lastMonth = null;
