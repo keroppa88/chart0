@@ -3,6 +3,10 @@ on:
   schedule:
     - cron: '0 9 * * 1-5' # 日本時間18:00
   workflow_dispatch:
+
+permissions:
+  contents: write  # ← ★これを追加
+
 jobs:
   build:
     runs-on: ubuntu-latest
