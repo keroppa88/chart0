@@ -190,16 +190,13 @@
       <button id="helpCloseBtn" class="modal-close" type="button">閉じる</button>
     </div>
     <div class="modal-body">
-- 平日18時すぎに自動更新。
+- 平日18時頃に自動更新。
 - 銘柄選択は左右矢印で高速切り替え、左右＝1ずつ、上下＝10ずつ。
 - ホイール拡大縮小、ドラッグ左右移動
-- 爆速表示を実現！Yahooファイナンスや証券会社ソフトでは仕組み的にたぶん無理。
+- 個別CSVファイルから必要な銘柄だけを読み込むことで爆速表示を実現！
 - テクニカル指標は表示・非表示・場所入れ替えが可能。数値変更で動的描写。
 - 日足・週足・月足の切り替えが可能。
-- 表示範囲の騰落率、勝率、陽線率などを表記する。 
-- 任意の銘柄との比較が可能。表示範囲初日始値＝100。 
-- 公式JPXAPI→個別CSV→HTMLブラウザアプリで表示。
-- 2026/01/19～
+- 公式JPXAPI→個別CSV→HTMLブラウザアプリで表示。    
     </div>
   </div>
 </div>
@@ -993,10 +990,20 @@ function drawMain(visibleCandles, visibleIndices){
     ctx.textBaseline = 'top';
     
     if(compareEnabled && compareSymbolCode){
-      // 比較モード：銘柄名のみ表示
-      ctx.fillStyle = '#acacac';
+      // 比較モード：銘柄名のみ表示（比較銘柄は薄く）
       ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      ctx.fillText(`${currentSymbolDisplay}　${compareSymbolName}`, pad.l + 5, pad.t + 5);
+      
+      // メイン銘柄（濃く）
+      ctx.fillStyle = '#acacac';
+      ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
+      
+      // 全角スペース
+      const mainWidth = ctx.measureText(currentSymbolDisplay).width;
+      const spaceWidth = ctx.measureText('　').width;
+      
+      // 比較銘柄（薄く）
+      ctx.fillStyle = 'rgba(172, 172, 172, 0.4)';
+      ctx.fillText(compareSymbolName, pad.l + 5 + mainWidth + spaceWidth, pad.t + 5);
     }else{
       // 通常モード：統計情報も表示
       const { winRate, upAvg, downAvg, bullRate, totalReturn, bullAvg, bearAvg } = calcStatsForVisibleWindow();
@@ -1851,4 +1858,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
