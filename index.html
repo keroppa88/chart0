@@ -101,7 +101,14 @@
     <div class="legend-item"><div class="legend-color" style="background:#333"></div><span>価格（ローソク足）</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
-    <div class="legend-item" style="margin-left:auto; display:flex; gap:10px;">
+    <div class="legend-item" style="margin-left:auto; display:flex; gap:10px; align-items:center;">
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="compareCheck">
+        <span>比較</span>
+      </label>
+      <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
+        <option value="">選択してください</option>
+      </select>
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
         <input type="checkbox" id="dailyCheck" checked>
         <span>日足</span>
@@ -205,6 +212,13 @@ let series = []; // 表示用データ（日足/週足/月足）
 let timeframe = 'daily'; // 'daily', 'weekly', 'monthly'
 let displayCount = 100;
 let offsetX = 0;
+
+// 比較機能用
+let compareEnabled = false;
+let compareDailySeries = [];
+let compareSeries = [];
+let compareSymbolCode = "";
+let compareSymbolName = "";
 
 let isDragging = false;
 let dragStartX = 0;
@@ -491,10 +505,15 @@ function preloadAdjacentSymbols(currentIndex){
 ========================= */
 function populateSymbolSelect(){
   const sel = document.getElementById('symbolSelect');
+  const compareSel = document.getElementById('compareSymbolSelect');
   if(!sel) return;
   
   const current = sel.value;
+  const currentCompare = compareSel?.value || "";
   sel.innerHTML = "";
+  if(compareSel) {
+    compareSel.innerHTML = '<option value="">選択してください</option>';
+  }
   
   if(!Array.isArray(chartListItems) || chartListItems.length === 0){
     const opt = document.createElement('option');
@@ -509,12 +528,24 @@ function populateSymbolSelect(){
     opt.value = item.code;
     opt.textContent = `${item.code} ${item.name}`;
     sel.appendChild(opt);
+    
+    // 比較用プルダウンにも追加
+    if(compareSel) {
+      const compareOpt = document.createElement('option');
+      compareOpt.value = item.code;
+      compareOpt.textContent = `${item.code} ${item.name}`;
+      compareSel.appendChild(compareOpt);
+    }
   }
   
   if(current && chartListItems.some(item => item.code === current)){
     sel.value = current;
   }else{
     sel.selectedIndex = 0;
+  }
+  
+  if(currentCompare && chartListItems.some(item => item.code === currentCompare)){
+    compareSel.value = currentCompare;
   }
 }
 
@@ -804,6 +835,38 @@ function getVisibleWindow(){
   return { visibleCandles, visibleIndices, startSeriesIndex: start, endSeriesIndex: end };
 }
 
+function getVisibleWindowForSeries(targetSeries){
+  const n = targetSeries.length;
+  const extraSpace = rightSpaceEnabled ? 5 : 0;
+
+  const startRaw = n - displayCount - offsetX;
+  const endRaw = startRaw + displayCount;
+
+  const start = Math.max(0, startRaw);
+  const end = Math.min(n, endRaw);
+
+  const realSlice = (start < end) ? targetSeries.slice(start, end) : [];
+  const realLen = realSlice.length;
+
+  const leftPadN = displayCount - realLen;
+  const leftPads = new Array(leftPadN).fill(null).map(() => ({ 
+    date: "", open: null, high: null, low: null, close: null, volume: null 
+  }));
+
+  const rightPads = new Array(extraSpace).fill(null).map(() => ({ 
+    date: "", open: null, high: null, low: null, close: null, volume: null 
+  }));
+
+  const visibleCandles = leftPads.concat(realSlice, rightPads);
+
+  const visibleIndices = new Array(leftPadN).fill(null).concat(
+    Array.from({ length: realLen }, (_, i) => start + i),
+    new Array(extraSpace).fill(null)
+  );
+
+  return { visibleCandles, visibleIndices };
+}
+
 function updateViewInfo(){
   const el = document.getElementById('viewInfo');
   if(!series || series.length === 0){
@@ -870,11 +933,63 @@ async function applySymbol(){
 function updateTimeframeSeries(){
   if(timeframe === 'daily'){
     series = dailySeries;
+    compareSeries = compareDailySeries;
   }else if(timeframe === 'weekly'){
     series = convertToWeekly(dailySeries);
+    compareSeries = convertToWeekly(compareDailySeries);
   }else if(timeframe === 'monthly'){
     series = convertToMonthly(dailySeries);
+    compareSeries = convertToMonthly(compareDailySeries);
   }
+}
+
+async function loadCompareSymbol(){
+  const compareSel = document.getElementById('compareSymbolSelect');
+  const code = compareSel?.value;
+  
+  if(!code) {
+    compareDailySeries = [];
+    compareSeries = [];
+    compareSymbolCode = "";
+    compareSymbolName = "";
+    return;
+  }
+  
+  const selectedOption = compareSel?.selectedOptions?.[0];
+  compareSymbolName = selectedOption?.textContent || code;
+  compareSymbolCode = code;
+  
+  // CSVを読み込み（日足データ）
+  compareDailySeries = await loadSymbolCSV(code);
+  
+  // 時間軸に応じてseriesを設定
+  updateTimeframeSeries();
+}
+
+function normalizeToFirstOpen(data, visibleIndices){
+  // 表示範囲の最初の有効な足の始値を見つける
+  let firstOpen = null;
+  for(const idx of visibleIndices){
+    if(idx != null && data[idx] && data[idx].open != null){
+      firstOpen = data[idx].open;
+      break;
+    }
+  }
+  
+  if(firstOpen == null || firstOpen === 0) return data;
+  
+  // 全データを相対化
+  return data.map(candle => {
+    if(!candle || candle.open == null) return candle;
+    return {
+      date: candle.date,
+      open: (candle.open / firstOpen) * 100,
+      high: candle.high != null ? (candle.high / firstOpen) * 100 : null,
+      low: candle.low != null ? (candle.low / firstOpen) * 100 : null,
+      close: (candle.close / firstOpen) * 100,
+      volume: candle.volume
+    };
+  });
 }
 
 function switchTimeframe(newTimeframe){
@@ -928,60 +1043,105 @@ function drawMain(visibleCandles, visibleIndices){
 
   // 銘柄名と統計情報を背景として表示
   if(currentSymbolDisplay){
-    const { winRate, upAvg, downAvg, bullRate, totalReturn, bullAvg, bearAvg } = calcStatsForVisibleWindow();
-    
-    const fmtPct = (v) => (v == null || Number.isNaN(v)) ? "-" : v.toFixed(1) + "%";
-    const fmtAvg = (v) => {
-      if(v == null || Number.isNaN(v)) return "-";
-      const sign = v >= 0 ? "+" : "";
-      return sign + v.toFixed(1) + "%";
-    };
-
-    const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
-
     ctx.save();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     
-    // 1行目：銘柄名（大きいフォント、薄いグレー）+ 騰落率（普通フォント、濃いグレー）
-    ctx.fillStyle = '#acacac';
-    ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
-    
-    // 銘柄名の幅を測定して、その右に時間軸と騰落率を配置
-    const nameWidth = ctx.measureText(currentSymbolDisplay).width;
-    ctx.fillStyle = '#acacac';
-    ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(`${timeframeLabel}騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
-    
-    // 2行目：勝率と平均（小さいフォント、濃いグレー）
-    const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
-    ctx.fillText(line2, pad.l + 5, pad.t + 45);
-    
-    // 3行目：陽線率と陽線時平均・陰線時平均
-    const line3 = `陽線率${fmtPct(bullRate)}（陽線時平均${fmtAvg(bullAvg)}、陰線時平均${fmtAvg(bearAvg)}）`;
-    ctx.fillText(line3, pad.l + 5, pad.t + 65);
+    if(compareEnabled && compareSymbolCode){
+      // 比較モード：銘柄名のみ表示
+      ctx.fillStyle = '#acacac';
+      ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(`${currentSymbolDisplay}　${compareSymbolName}`, pad.l + 5, pad.t + 5);
+    }else{
+      // 通常モード：統計情報も表示
+      const { winRate, upAvg, downAvg, bullRate, totalReturn, bullAvg, bearAvg } = calcStatsForVisibleWindow();
+      
+      const fmtPct = (v) => (v == null || Number.isNaN(v)) ? "-" : v.toFixed(1) + "%";
+      const fmtAvg = (v) => {
+        if(v == null || Number.isNaN(v)) return "-";
+        const sign = v >= 0 ? "+" : "";
+        return sign + v.toFixed(1) + "%";
+      };
+
+      const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
+      
+      // 1行目：銘柄名（大きいフォント、薄いグレー）
+      ctx.fillStyle = '#acacac';
+      ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
+      
+      // 銘柄名の幅を測定して、その右に時間軸ラベルと騰落率を配置（同じ大きさのフォント）
+      const nameWidth = ctx.measureText(currentSymbolDisplay).width;
+      ctx.fillStyle = '#acacac';
+      ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(`${timeframeLabel}騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
+      
+      // 2行目：勝率と平均（小さいフォント、濃いグレー）
+      const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
+      ctx.fillText(line2, pad.l + 5, pad.t + 45);
+      
+      // 3行目：陽線率と陽線時平均・陰線時平均
+      const line3 = `陽線率${fmtPct(bullRate)}（陽線時平均${fmtAvg(bullAvg)}、陰線時平均${fmtAvg(bearAvg)}）`;
+      ctx.fillText(line3, pad.l + 5, pad.t + 65);
+    }
     
     ctx.restore();
   }
 
   let minP = Infinity, maxP = -Infinity;
 
-  visibleIndices.forEach((sIdx, i) => {
-    const c = visibleCandles[i];
+  // 比較モードの場合、データを正規化
+  let displaySeries = visibleCandles;
+  let displayCompareSeries = [];
+  
+  if(compareEnabled && compareSymbolCode && compareSeries.length > 0){
+    // 正規化したデータを作成
+    const normalizedMain = normalizeToFirstOpen(series, visibleIndices);
+    const normalizedCompare = normalizeToFirstOpen(compareSeries, visibleIndices);
+    
+    // 表示用のvisibleデータを作成
+    const { visibleCandles: visMain } = getVisibleWindowForSeries(normalizedMain);
+    const { visibleCandles: visCompare } = getVisibleWindowForSeries(normalizedCompare);
+    
+    displaySeries = visMain;
+    displayCompareSeries = visCompare;
+    
+    // メイン銘柄のmin/max
+    visibleIndices.forEach((sIdx, i) => {
+      const c = displaySeries[i];
+      if(c.high != null) maxP = Math.max(maxP, c.high);
+      if(c.low != null) minP = Math.min(minP, c.low);
+      if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
+      if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
+    });
+    
+    // 比較銘柄のmin/max
+    visibleIndices.forEach((sIdx, i) => {
+      const c = displayCompareSeries[i];
+      if(!c) return;
+      if(c.high != null) maxP = Math.max(maxP, c.high);
+      if(c.low != null) minP = Math.min(minP, c.low);
+      if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
+      if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
+    });
+  }else{
+    // 通常モード
+    visibleIndices.forEach((sIdx, i) => {
+      const c = visibleCandles[i];
 
-    if(c.high != null) maxP = Math.max(maxP, c.high);
-    if(c.low != null) minP = Math.min(minP, c.low);
-    if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
-    if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
+      if(c.high != null) maxP = Math.max(maxP, c.high);
+      if(c.low != null) minP = Math.min(minP, c.low);
+      if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
+      if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
 
-    if(sIdx != null){
-      const m1 = indicators.ma1[sIdx];
-      const m2 = indicators.ma2[sIdx];
-      if(m1 != null){ minP = Math.min(minP, m1); maxP = Math.max(maxP, m1); }
-      if(m2 != null){ minP = Math.min(minP, m2); maxP = Math.max(maxP, m2); }
-    }
-  });
+      if(sIdx != null){
+        const m1 = indicators.ma1[sIdx];
+        const m2 = indicators.ma2[sIdx];
+        if(m1 != null){ minP = Math.min(minP, m1); maxP = Math.max(maxP, m1); }
+        if(m2 != null){ minP = Math.min(minP, m2); maxP = Math.max(maxP, m2); }
+      }
+    });
+  }
 
   if(minP === Infinity){
     ctx.fillStyle = '#666'; 
@@ -1040,7 +1200,40 @@ function drawMain(visibleCandles, visibleIndices){
   const bodyW = (chartW / visibleCandles.length) * 0.6;
   ctx.lineWidth = 1;
 
-  visibleCandles.forEach((c, i) => {
+  // 比較銘柄のローソク足（薄く描画）
+  if(compareEnabled && displayCompareSeries.length > 0){
+    displayCompareSeries.forEach((c, i) => {
+      if(!c || c.open == null || c.high == null || c.low == null || c.close == null) return;
+
+      const x = getX(i);
+      const yH = getY(c.high);
+      const yL = getY(c.low);
+      const yO = getY(c.open);
+      const yC = getY(c.close);
+
+      const up = c.close >= c.open;
+      const col = up ? 'rgba(38, 166, 154, 0.3)' : 'rgba(239, 83, 80, 0.3)';
+
+      ctx.strokeStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(x, yH);
+      ctx.lineTo(x, yL);
+      ctx.stroke();
+
+      const top = Math.min(yO, yC);
+      const bot = Math.max(yO, yC);
+      const height = Math.max(1, bot - top);
+
+      ctx.fillStyle = col;
+      ctx.fillRect(x - bodyW / 2, top, bodyW, height);
+
+      ctx.strokeStyle = col;
+      ctx.strokeRect(x - bodyW / 2, top, bodyW, height);
+    });
+  }
+
+  // メイン銘柄のローソク足（通常描画）
+  displaySeries.forEach((c, i) => {
     if(c.open == null || c.high == null || c.low == null || c.close == null) return;
 
     const x = getX(i);
@@ -1087,8 +1280,12 @@ function drawMain(visibleCandles, visibleIndices){
     });
     ctx.stroke();
   };
-  drawLine(indicators.ma1, '#ff9800');
-  drawLine(indicators.ma2, '#2196f3');
+  
+  // 比較モード時はMAを非表示
+  if(!compareEnabled || !compareSymbolCode){
+    drawLine(indicators.ma1, '#ff9800');
+    drawLine(indicators.ma2, '#2196f3');
+  }
 }
 
 function drawVolume(visibleCandles, visibleIndices){
