@@ -937,7 +937,7 @@ function drawMain(visibleCandles, visibleIndices){
       return sign + v.toFixed(1) + "%";
     };
 
-    const timeframeLabel = timeframe === 'daily' ? '' : timeframe === 'weekly' ? '（週足）' : '（月足）';
+    const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
 
     ctx.save();
     ctx.textAlign = 'left';
@@ -946,13 +946,13 @@ function drawMain(visibleCandles, visibleIndices){
     // 1行目：銘柄名（大きいフォント、薄いグレー）+ 騰落率（普通フォント、濃いグレー）
     ctx.fillStyle = '#acacac';
     ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(currentSymbolDisplay + timeframeLabel, pad.l + 5, pad.t + 5);
+    ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
     
-    // 銘柄名の幅を測定して、その右に騰落率を配置
-    const nameWidth = ctx.measureText(currentSymbolDisplay + timeframeLabel).width;
+    // 銘柄名の幅を測定して、その右に時間軸と騰落率を配置
+    const nameWidth = ctx.measureText(currentSymbolDisplay).width;
     ctx.fillStyle = '#acacac';
     ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(`騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
+    ctx.fillText(`${timeframeLabel}騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
     
     // 2行目：勝率と平均（小さいフォント、濃いグレー）
     const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
@@ -1352,7 +1352,7 @@ function handleTooltip(e, canvas){
   const stK = indicators.stoch.k[sIdx], stD = indicators.stoch.d[sIdx];
   const macd = indicators.macd.macd[sIdx], sig = indicators.macd.signal[sIdx];
 
-  const timeframeLabel = timeframe === 'daily' ? '' : timeframe === 'weekly' ? '（週足）' : '（月足）';
+  const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
 
   let html = `<strong>${c.date}${timeframeLabel}</strong><br>`;
   html += `始:${fmt(c.open)} 高:${fmt(c.high)} 安:${fmt(c.low)} 終:${fmt(c.close)}<br>`;
