@@ -194,14 +194,13 @@
       <button id="helpCloseBtn" class="modal-close" type="button">閉じる</button>
     </div>
     <div class="modal-body">
-- 平日18時すぎ頃に自動更新。
+- 平日18時すぎ自動更新。
 - 銘柄選択は左右矢印で高速切り替え、左右＝1ずつ、上下＝10ずつ。
 - ホイール拡大縮小、ドラッグ左右移動。
 - 爆速表示を実現！
 - テクニカル指標は表示・非表示・場所入れ替えが可能。数値変更で動的描写。
 - 日足・週足・月足の切り替えが可能。
 - 表示範囲の勝率、陽線率などを表示する。
-- 日付ラインで日付縦線の表示有無を選択可能。
 - 任意の銘柄を比較対象にすることができる。表示範囲初日始値＝100。
 - 公式JPXAPI→個別CSV→HTMLブラウザアプリで表示。    
     </div>
@@ -1197,17 +1196,38 @@ function drawMain(visibleCandles, visibleIndices){
   if(showMonthStart && timeframe !== 'monthly'){
     // 月初（またはその月の最初の営業日）を表示
     let lastMonth = null;
+    const allMonthPositions = [];
+    const allMonthLabels = [];
+    
     visibleCandles.forEach((c, i) => {
       if(!c.date) return;
       const dateObj = new Date(c.date);
       const currentMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
       
       if(currentMonth !== lastMonth){
-        datePositions.push(i);
-        dateLabels.push(currentMonth); // YYYY-MM形式
+        allMonthPositions.push(i);
+        allMonthLabels.push(currentMonth);
         lastMonth = currentMonth;
       }
     });
+    
+    // 20本以上ある場合は2ヶ月ごとに間引く
+    if(allMonthPositions.length >= 20){
+      // 直近（最後）の月は必ず表示
+      const lastIdx = allMonthPositions.length - 1;
+      datePositions.push(allMonthPositions[lastIdx]);
+      dateLabels.push(allMonthLabels[lastIdx]);
+      
+      // そこから遡って2ヶ月ごとに表示
+      for(let i = lastIdx - 2; i >= 0; i -= 2){
+        datePositions.unshift(allMonthPositions[i]);
+        dateLabels.unshift(allMonthLabels[i]);
+      }
+    }else{
+      // 20本未満ならすべて表示
+      datePositions.push(...allMonthPositions);
+      dateLabels.push(...allMonthLabels);
+    }
   }else{
     // 等間隔表示（従来通り）
     const interval = Math.ceil(visibleCandles.length / 6);
@@ -1918,4 +1938,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
