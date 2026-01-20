@@ -110,6 +110,10 @@
         <option value="">選択してください</option>
       </select>
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="dateLineCheck">
+        <span>日付ライン</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
         <input type="checkbox" id="dailyCheck" checked>
         <span>日足</span>
       </label>
@@ -272,6 +276,7 @@ function restoreBackBuffers(){
 
 let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
+let dateLineEnabled = false;
 
 /* =========================
    Data Version (日次キャッシュ用)
@@ -1183,11 +1188,56 @@ function drawMain(visibleCandles, visibleIndices){
     seriesIndex: visibleIndices[i]
   }));
 
-  visibleCandles.forEach((c, i) => {
-    if(c.date && i % Math.ceil(visibleCandles.length / 6) === 0){
-      ctx.fillStyle = '#999';
-      ctx.textAlign = 'center';
-      ctx.fillText(c.date, getX(i), h - 5);
+  // 日付表示ロジック
+  const showMonthStart = displayCount >= 60; // 60本以上なら月初表示
+  const datePositions = []; // 日付を表示する位置を記録
+  
+  if(showMonthStart && timeframe !== 'monthly'){
+    // 月初（またはその月の最初の営業日）を表示
+    let lastMonth = null;
+    visibleCandles.forEach((c, i) => {
+      if(!c.date) return;
+      const dateObj = new Date(c.date);
+      const currentMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+      
+      if(currentMonth !== lastMonth){
+        datePositions.push(i);
+        lastMonth = currentMonth;
+      }
+    });
+  }else{
+    // 等間隔表示（従来通り）
+    const interval = Math.ceil(visibleCandles.length / 6);
+    for(let i = 0; i < visibleCandles.length; i += interval){
+      if(visibleCandles[i].date){
+        datePositions.push(i);
+      }
+    }
+  }
+  
+  // 日付ラインを描画（チェックONの場合）
+  if(dateLineEnabled){
+    ctx.save();
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    
+    datePositions.forEach(i => {
+      const x = getX(i);
+      ctx.beginPath();
+      ctx.moveTo(x, pad.t);
+      ctx.lineTo(x, pad.t + chartH);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+  
+  // 日付テキストを描画
+  ctx.fillStyle = '#999';
+  ctx.textAlign = 'center';
+  datePositions.forEach(i => {
+    if(visibleCandles[i].date){
+      ctx.fillText(visibleCandles[i].date, getX(i), h - 5);
     }
   });
 
@@ -1742,6 +1792,12 @@ function setupEventListeners(){
     drawChart();
   });
 
+  // 日付ラインチェックボックス
+  document.getElementById('dateLineCheck')?.addEventListener('change', (e) => {
+    dateLineEnabled = e.target.checked;
+    drawChart();
+  });
+
   // 比較チェックボックス
   document.getElementById('compareCheck')?.addEventListener('change', async (e) => {
     compareEnabled = e.target.checked;
@@ -1860,4 +1916,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
