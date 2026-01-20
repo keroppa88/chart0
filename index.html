@@ -561,6 +561,68 @@ function recomputeIndicators(){
 }
 
 /* =========================
+   Statistics Calculation
+========================= */
+function calcStatsForVisibleWindow(){
+  if(!series || series.length === 0){
+    return { winRate: null, upAvg: null, downAvg: null, bullRate: null };
+  }
+
+  const { visibleIndices } = getVisibleWindow();
+  const idxs = visibleIndices.filter(i => i != null);
+  if(idxs.length === 0){
+    return { winRate: null, upAvg: null, downAvg: null, bullRate: null };
+  }
+
+  // 陽線率: close > open
+  let bullN = 0, bullDen = 0;
+
+  // 前日比（窓内比較）：勝率・上昇時平均・下落時平均
+  let winN = 0, winDen = 0;
+  let upSum = 0, upCnt = 0;
+  let downSum = 0, downCnt = 0;
+
+  for(let k = 0; k < idxs.length; k++){
+    const i = idxs[k];
+    const c = series[i];
+    if(!c) continue;
+
+    // bull rate: close > open
+    if(c.open != null && c.close != null){
+      bullDen++;
+      if(c.close > c.open) bullN++;
+    }
+
+    // prev-close compare within visible window (k>=1)
+    if(k >= 1){
+      const ip = idxs[k - 1];
+      const p = series[ip];
+      if(p && p.close != null && c.close != null && p.close !== 0){
+        const retPct = ((c.close - p.close) / p.close) * 100;
+
+        winDen++;
+        if(retPct > 0) winN++;
+
+        if(retPct > 0){
+          upSum += retPct; 
+          upCnt++;
+        }else if(retPct < 0){
+          downSum += retPct; 
+          downCnt++;
+        }
+      }
+    }
+  }
+
+  const bullRate = bullDen > 0 ? (bullN / bullDen) * 100 : null;
+  const winRate = winDen > 0 ? (winN / winDen) * 100 : null;
+  const upAvg = upCnt > 0 ? (upSum / upCnt) : null;
+  const downAvg = downCnt > 0 ? (downSum / downCnt) : null;
+
+  return { winRate, upAvg, downAvg, bullRate };
+}
+
+/* =========================
    View Management
 ========================= */
 function clampView(){
@@ -699,20 +761,40 @@ function drawChart(){
 function drawMain(visibleCandles, visibleIndices){
   const ctx = mainCtx;
   const w = mainCanvas.width, h = mainCanvas.height;
-  const pad = { t: 20, b: 30, l: 10, r: 60 };
+  const pad = { t: 70, b: 30, l: 10, r: 60 };
   const chartW = w - pad.l - pad.r;
   const chartH = h - pad.t - pad.b;
 
   ctx.clearRect(0, 0, w, h);
 
-  // 銘柄名を背景として描画
+  // 銘柄名と統計情報を表示（2行）
   if(currentSymbolDisplay){
+    const { winRate, upAvg, downAvg, bullRate } = calcStatsForVisibleWindow();
+    
+    const fmtPct = (v) => (v == null || Number.isNaN(v)) ? "-" : v.toFixed(1) + "%";
+    const fmtAvg = (v) => {
+      if(v == null || Number.isNaN(v)) return "-";
+      const sign = v >= 0 ? "+" : "";
+      return sign + v.toFixed(1) + "%";
+    };
+
     ctx.save();
-    ctx.fillStyle = '#d0d0d0';
-    ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.fillStyle = '#111';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
+    ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    
+    // 1行目：銘柄名
+    ctx.fillText(currentSymbolDisplay, pad.l + 6, pad.t + 4);
+    
+    // 2行目：勝率と平均
+    const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
+    ctx.fillText(line2, pad.l + 6, pad.t + 24);
+    
+    // 3行目：陽線率
+    const line3 = `陽線率${fmtPct(bullRate)}`;
+    ctx.fillText(line3, pad.l + 6, pad.t + 44);
+    
     ctx.restore();
   }
 
