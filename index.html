@@ -835,38 +835,6 @@ function getVisibleWindow(){
   return { visibleCandles, visibleIndices, startSeriesIndex: start, endSeriesIndex: end };
 }
 
-function getVisibleWindowForSeries(targetSeries){
-  const n = targetSeries.length;
-  const extraSpace = rightSpaceEnabled ? 5 : 0;
-
-  const startRaw = n - displayCount - offsetX;
-  const endRaw = startRaw + displayCount;
-
-  const start = Math.max(0, startRaw);
-  const end = Math.min(n, endRaw);
-
-  const realSlice = (start < end) ? targetSeries.slice(start, end) : [];
-  const realLen = realSlice.length;
-
-  const leftPadN = displayCount - realLen;
-  const leftPads = new Array(leftPadN).fill(null).map(() => ({ 
-    date: "", open: null, high: null, low: null, close: null, volume: null 
-  }));
-
-  const rightPads = new Array(extraSpace).fill(null).map(() => ({ 
-    date: "", open: null, high: null, low: null, close: null, volume: null 
-  }));
-
-  const visibleCandles = leftPads.concat(realSlice, rightPads);
-
-  const visibleIndices = new Array(leftPadN).fill(null).concat(
-    Array.from({ length: realLen }, (_, i) => start + i),
-    new Array(extraSpace).fill(null)
-  );
-
-  return { visibleCandles, visibleIndices };
-}
-
 function updateViewInfo(){
   const el = document.getElementById('viewInfo');
   if(!series || series.length === 0){
@@ -964,32 +932,6 @@ async function loadCompareSymbol(){
   
   // 時間軸に応じてseriesを設定
   updateTimeframeSeries();
-}
-
-function normalizeToFirstOpen(data, visibleIndices){
-  // 表示範囲の最初の有効な足の始値を見つける
-  let firstOpen = null;
-  for(const idx of visibleIndices){
-    if(idx != null && data[idx] && data[idx].open != null){
-      firstOpen = data[idx].open;
-      break;
-    }
-  }
-  
-  if(firstOpen == null || firstOpen === 0) return data;
-  
-  // 全データを相対化
-  return data.map(candle => {
-    if(!candle || candle.open == null) return candle;
-    return {
-      date: candle.date,
-      open: (candle.open / firstOpen) * 100,
-      high: candle.high != null ? (candle.high / firstOpen) * 100 : null,
-      low: candle.low != null ? (candle.low / firstOpen) * 100 : null,
-      close: (candle.close / firstOpen) * 100,
-      volume: candle.volume
-    };
-  });
 }
 
 function switchTimeframe(newTimeframe){
@@ -1093,37 +1035,79 @@ function drawMain(visibleCandles, visibleIndices){
   // 比較モードの場合、データを正規化
   let displaySeries = visibleCandles;
   let displayCompareSeries = [];
+  let displayVisibleIndices = visibleIndices;
   
   if(compareEnabled && compareSymbolCode && compareSeries.length > 0){
-    // 正規化したデータを作成
-    const normalizedMain = normalizeToFirstOpen(series, visibleIndices);
-    const normalizedCompare = normalizeToFirstOpen(compareSeries, visibleIndices);
+    // 正規化用の最初の始値を取得
+    let mainFirstOpen = null;
+    let compareFirstOpen = null;
     
-    // 表示用のvisibleデータを作成
-    const { visibleCandles: visMain } = getVisibleWindowForSeries(normalizedMain);
-    const { visibleCandles: visCompare } = getVisibleWindowForSeries(normalizedCompare);
+    for(const idx of visibleIndices){
+      if(idx != null && series[idx] && series[idx].open != null){
+        mainFirstOpen = series[idx].open;
+        break;
+      }
+    }
     
-    displaySeries = visMain;
-    displayCompareSeries = visCompare;
+    for(const idx of visibleIndices){
+      if(idx != null && compareSeries[idx] && compareSeries[idx].open != null){
+        compareFirstOpen = compareSeries[idx].open;
+        break;
+      }
+    }
     
-    // メイン銘柄のmin/max
-    visibleIndices.forEach((sIdx, i) => {
-      const c = displaySeries[i];
-      if(c.high != null) maxP = Math.max(maxP, c.high);
-      if(c.low != null) minP = Math.min(minP, c.low);
-      if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
-      if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
-    });
-    
-    // 比較銘柄のmin/max
-    visibleIndices.forEach((sIdx, i) => {
-      const c = displayCompareSeries[i];
-      if(!c) return;
-      if(c.high != null) maxP = Math.max(maxP, c.high);
-      if(c.low != null) minP = Math.min(minP, c.low);
-      if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
-      if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
-    });
+    if(mainFirstOpen && mainFirstOpen !== 0 && compareFirstOpen && compareFirstOpen !== 0){
+      // 正規化したデータを作成
+      displaySeries = visibleCandles.map((c, i) => {
+        const idx = visibleIndices[i];
+        if(idx == null || !series[idx]) return c;
+        const original = series[idx];
+        if(original.open == null) return c;
+        
+        return {
+          date: original.date,
+          open: (original.open / mainFirstOpen) * 100,
+          high: original.high != null ? (original.high / mainFirstOpen) * 100 : null,
+          low: original.low != null ? (original.low / mainFirstOpen) * 100 : null,
+          close: (original.close / mainFirstOpen) * 100,
+          volume: original.volume
+        };
+      });
+      
+      displayCompareSeries = visibleCandles.map((c, i) => {
+        const idx = visibleIndices[i];
+        if(idx == null || !compareSeries[idx]) return null;
+        const original = compareSeries[idx];
+        if(original.open == null) return null;
+        
+        return {
+          date: original.date,
+          open: (original.open / compareFirstOpen) * 100,
+          high: original.high != null ? (original.high / compareFirstOpen) * 100 : null,
+          low: original.low != null ? (original.low / compareFirstOpen) * 100 : null,
+          close: (original.close / compareFirstOpen) * 100,
+          volume: original.volume
+        };
+      });
+      
+      // メイン銘柄のmin/max
+      displaySeries.forEach((c) => {
+        if(!c) return;
+        if(c.high != null) maxP = Math.max(maxP, c.high);
+        if(c.low != null) minP = Math.min(minP, c.low);
+        if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
+        if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
+      });
+      
+      // 比較銘柄のmin/max
+      displayCompareSeries.forEach((c) => {
+        if(!c) return;
+        if(c.high != null) maxP = Math.max(maxP, c.high);
+        if(c.low != null) minP = Math.min(minP, c.low);
+        if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
+        if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
+      });
+    }
   }else{
     // 通常モード
     visibleIndices.forEach((sIdx, i) => {
@@ -1745,6 +1729,23 @@ function setupEventListeners(){
   document.getElementById('rightSpaceCheck')?.addEventListener('change', (e) => {
     rightSpaceEnabled = e.target.checked;
     drawChart();
+  });
+
+  // 比較チェックボックス
+  document.getElementById('compareCheck')?.addEventListener('change', async (e) => {
+    compareEnabled = e.target.checked;
+    if(compareEnabled){
+      await loadCompareSymbol();
+    }
+    drawChart();
+  });
+
+  // 比較銘柄選択
+  document.getElementById('compareSymbolSelect')?.addEventListener('change', async (e) => {
+    if(compareEnabled){
+      await loadCompareSymbol();
+      drawChart();
+    }
   });
 
   // 時間軸切替のチェックボックス
