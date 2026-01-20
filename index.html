@@ -1191,6 +1191,7 @@ function drawMain(visibleCandles, visibleIndices){
   // 日付表示ロジック
   const showMonthStart = displayCount >= 60; // 60本以上なら月初表示
   const datePositions = []; // 日付を表示する位置を記録
+  const dateLabels = []; // 表示する日付テキスト
   
   if(showMonthStart && timeframe !== 'monthly'){
     // 月初（またはその月の最初の営業日）を表示
@@ -1202,6 +1203,7 @@ function drawMain(visibleCandles, visibleIndices){
       
       if(currentMonth !== lastMonth){
         datePositions.push(i);
+        dateLabels.push(currentMonth); // YYYY-MM形式
         lastMonth = currentMonth;
       }
     });
@@ -1211,6 +1213,7 @@ function drawMain(visibleCandles, visibleIndices){
     for(let i = 0; i < visibleCandles.length; i += interval){
       if(visibleCandles[i].date){
         datePositions.push(i);
+        dateLabels.push(visibleCandles[i].date); // YYYY-MM-DD形式
       }
     }
   }
@@ -1235,10 +1238,8 @@ function drawMain(visibleCandles, visibleIndices){
   // 日付テキストを描画
   ctx.fillStyle = '#999';
   ctx.textAlign = 'center';
-  datePositions.forEach(i => {
-    if(visibleCandles[i].date){
-      ctx.fillText(visibleCandles[i].date, getX(i), h - 5);
-    }
+  datePositions.forEach((pos, idx) => {
+    ctx.fillText(dateLabels[idx], getX(pos), h - 5);
   });
 
   // ローソク足描画
