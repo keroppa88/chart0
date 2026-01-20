@@ -28,7 +28,7 @@
     .param-group select{ padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; }
 
     .hint { font-size:12px; color:#666; }
-    .legend { display:flex; gap:15px; font-size:12px; margin-bottom:10px; flex-wrap:wrap; }
+    .legend { display:flex; gap:15px; font-size:12px; margin-bottom:10px; flex-wrap:wrap; align-items:center; }
     .legend-item { display:flex; align-items:center; gap:4px; }
     .legend-color { width:12px; height:12px; border-radius:2px; }
 
@@ -101,7 +101,19 @@
     <div class="legend-item"><div class="legend-color" style="background:#333"></div><span>価格（ローソク足）</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
-    <div class="legend-item" style="margin-left:auto;">
+    <div class="legend-item" style="margin-left:auto; display:flex; gap:10px;">
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="dailyCheck" checked>
+        <span>日足</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="weeklyCheck">
+        <span>週足</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="monthlyCheck">
+        <span>月足</span>
+      </label>
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
         <input type="checkbox" id="rightSpaceCheck">
         <span>右スペース</span>
@@ -176,6 +188,7 @@
 - ホイール拡大縮小、ドラッグ左右移動
 - 個別CSVファイルから必要な銘柄だけを読み込むことで爆速表示を実現！
 - テクニカル指標は表示・非表示・場所入れ替えが可能。数値変更で動的描写。
+- 日足・週足・月足の切り替えが可能。
 - 公式JPXAPI→個別CSV→HTMLブラウザアプリで表示。    
     </div>
   </div>
@@ -186,8 +199,10 @@
    State
 ========================= */
 let chartListItems = null;
-let symbolCache = new Map(); // code -> series data
-let series = [];
+let symbolCache = new Map(); // code -> daily series data
+let dailySeries = []; // 日足データ（オリジナル）
+let series = []; // 表示用データ（日足/週足/月足）
+let timeframe = 'daily'; // 'daily', 'weekly', 'monthly'
 let displayCount = 100;
 let offsetX = 0;
 
@@ -345,6 +360,95 @@ function parseChartList(text){
     out.push({ code, name });
   }
   return out;
+}
+
+/* =========================
+   週足・月足データ生成
+========================= */
+function convertToWeekly(dailyData){
+  if(!dailyData || dailyData.length === 0) return [];
+  
+  const weekly = [];
+  let currentWeek = null;
+  
+  for(const day of dailyData){
+    const dateObj = new Date(day.date);
+    const dayOfWeek = dateObj.getDay(); // 0=日曜, 1=月曜, ..., 5=金曜
+    
+    // 週の開始判定（月曜日または最初のデータ）
+    if(!currentWeek || dayOfWeek === 1 || dayOfWeek < currentWeek.lastDayOfWeek){
+      if(currentWeek){
+        weekly.push(currentWeek.data);
+      }
+      currentWeek = {
+        data: {
+          date: day.date,
+          open: day.open,
+          high: day.high,
+          low: day.low,
+          close: day.close,
+          volume: day.volume || 0
+        },
+        lastDayOfWeek: dayOfWeek
+      };
+    }else{
+      // 週内のデータを集約
+      currentWeek.data.high = Math.max(currentWeek.data.high, day.high);
+      currentWeek.data.low = Math.min(currentWeek.data.low, day.low);
+      currentWeek.data.close = day.close;
+      currentWeek.data.volume += (day.volume || 0);
+      currentWeek.lastDayOfWeek = dayOfWeek;
+    }
+  }
+  
+  // 最後の週を追加
+  if(currentWeek){
+    weekly.push(currentWeek.data);
+  }
+  
+  return weekly;
+}
+
+function convertToMonthly(dailyData){
+  if(!dailyData || dailyData.length === 0) return [];
+  
+  const monthly = [];
+  let currentMonth = null;
+  
+  for(const day of dailyData){
+    const dateObj = new Date(day.date);
+    const yearMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+    
+    if(!currentMonth || currentMonth.yearMonth !== yearMonth){
+      if(currentMonth){
+        monthly.push(currentMonth.data);
+      }
+      currentMonth = {
+        yearMonth: yearMonth,
+        data: {
+          date: day.date,
+          open: day.open,
+          high: day.high,
+          low: day.low,
+          close: day.close,
+          volume: day.volume || 0
+        }
+      };
+    }else{
+      // 月内のデータを集約
+      currentMonth.data.high = Math.max(currentMonth.data.high, day.high);
+      currentMonth.data.low = Math.min(currentMonth.data.low, day.low);
+      currentMonth.data.close = day.close;
+      currentMonth.data.volume += (day.volume || 0);
+    }
+  }
+  
+  // 最後の月を追加
+  if(currentMonth){
+    monthly.push(currentMonth.data);
+  }
+  
+  return monthly;
 }
 
 /* =========================
@@ -722,7 +826,8 @@ function updateViewInfo(){
     } 
   }
 
-  el.textContent = `表示本数: ${displayCount} / 表示範囲: ${startDate && endDate ? `${startDate} ~ ${endDate}` : '-'}`;
+  const timeframeLabel = timeframe === 'daily' ? '日足' : timeframe === 'weekly' ? '週足' : '月足';
+  el.textContent = `${timeframeLabel} 表示本数: ${displayCount} / 表示範囲: ${startDate && endDate ? `${startDate} ~ ${endDate}` : '-'}`;
 }
 
 /* =========================
@@ -737,8 +842,11 @@ async function applySymbol(){
   const selectedOption = sel?.selectedOptions?.[0];
   currentSymbolDisplay = selectedOption?.textContent || code;
   
-  // CSVを読み込み
-  series = await loadSymbolCSV(code);
+  // CSVを読み込み（日足データ）
+  dailySeries = await loadSymbolCSV(code);
+  
+  // 時間軸に応じてseriesを設定
+  updateTimeframeSeries();
   
   offsetX = 0;
 
@@ -757,6 +865,30 @@ async function applySymbol(){
   
   // 前後の銘柄を先読み
   preloadAdjacentSymbols(sel.selectedIndex);
+}
+
+function updateTimeframeSeries(){
+  if(timeframe === 'daily'){
+    series = dailySeries;
+  }else if(timeframe === 'weekly'){
+    series = convertToWeekly(dailySeries);
+  }else if(timeframe === 'monthly'){
+    series = convertToMonthly(dailySeries);
+  }
+}
+
+function switchTimeframe(newTimeframe){
+  if(timeframe === newTimeframe) return;
+  
+  timeframe = newTimeframe;
+  updateTimeframeSeries();
+  
+  // 表示位置をリセット
+  offsetX = 0;
+  
+  recomputeIndicators();
+  updateViewInfo();
+  drawChart();
 }
 
 /* =========================
@@ -805,6 +937,8 @@ function drawMain(visibleCandles, visibleIndices){
       return sign + v.toFixed(1) + "%";
     };
 
+    const timeframeLabel = timeframe === 'daily' ? '' : timeframe === 'weekly' ? '（週足）' : '（月足）';
+
     ctx.save();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
@@ -812,10 +946,10 @@ function drawMain(visibleCandles, visibleIndices){
     // 1行目：銘柄名（大きいフォント、薄いグレー）+ 騰落率（普通フォント、濃いグレー）
     ctx.fillStyle = '#acacac';
     ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
+    ctx.fillText(currentSymbolDisplay + timeframeLabel, pad.l + 5, pad.t + 5);
     
     // 銘柄名の幅を測定して、その右に騰落率を配置
-    const nameWidth = ctx.measureText(currentSymbolDisplay).width;
+    const nameWidth = ctx.measureText(currentSymbolDisplay + timeframeLabel).width;
     ctx.fillStyle = '#acacac';
     ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.fillText(`騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
@@ -1218,7 +1352,9 @@ function handleTooltip(e, canvas){
   const stK = indicators.stoch.k[sIdx], stD = indicators.stoch.d[sIdx];
   const macd = indicators.macd.macd[sIdx], sig = indicators.macd.signal[sIdx];
 
-  let html = `<strong>${c.date}</strong><br>`;
+  const timeframeLabel = timeframe === 'daily' ? '' : timeframe === 'weekly' ? '（週足）' : '（月足）';
+
+  let html = `<strong>${c.date}${timeframeLabel}</strong><br>`;
   html += `始:${fmt(c.open)} 高:${fmt(c.high)} 安:${fmt(c.low)} 終:${fmt(c.close)}<br>`;
   if(c.volume != null){
     html += `出来高:${fmt(c.volume)}<br>`;
@@ -1414,6 +1550,41 @@ function setupEventListeners(){
     drawChart();
   });
 
+  // 時間軸切替のチェックボックス
+  const dailyCheck = document.getElementById('dailyCheck');
+  const weeklyCheck = document.getElementById('weeklyCheck');
+  const monthlyCheck = document.getElementById('monthlyCheck');
+
+  dailyCheck?.addEventListener('change', (e) => {
+    if(e.target.checked){
+      weeklyCheck.checked = false;
+      monthlyCheck.checked = false;
+      switchTimeframe('daily');
+    }else{
+      e.target.checked = true; // 最低1つは選択
+    }
+  });
+
+  weeklyCheck?.addEventListener('change', (e) => {
+    if(e.target.checked){
+      dailyCheck.checked = false;
+      monthlyCheck.checked = false;
+      switchTimeframe('weekly');
+    }else{
+      e.target.checked = true; // 最低1つは選択
+    }
+  });
+
+  monthlyCheck?.addEventListener('change', (e) => {
+    if(e.target.checked){
+      dailyCheck.checked = false;
+      weeklyCheck.checked = false;
+      switchTimeframe('monthly');
+    }else{
+      e.target.checked = true; // 最低1つは選択
+    }
+  });
+
   const inputs = document.querySelectorAll('.param-group input');
   inputs.forEach(inp => {
     inp.addEventListener('change', e => {
@@ -1480,4 +1651,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
