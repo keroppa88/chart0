@@ -1197,6 +1197,7 @@ function drawMain(visibleCandles, visibleIndices){
     // 月足の場合は常にYYYY-MM形式で表示
     const allMonthPositions = [];
     const allMonthLabels = [];
+    const allMonthNumbers = []; // 月番号を保持
     
     visibleCandles.forEach((c, i) => {
       if(!c.date) return;
@@ -1204,11 +1205,20 @@ function drawMain(visibleCandles, visibleIndices){
       const yearMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
       allMonthPositions.push(i);
       allMonthLabels.push(yearMonth);
+      allMonthNumbers.push(dateObj.getMonth() + 1); // 1-12
     });
     
-    // 20個を超える場合は2ヶ月ごとに間引く
-    if(allMonthPositions.length > 20){
-      // 直近（最後）の月は必ず表示
+    if(allMonthPositions.length >= 50){
+      // 50個以上：1月と7月のみ表示
+      allMonthPositions.forEach((pos, idx) => {
+        const monthNum = allMonthNumbers[idx];
+        if(monthNum === 1 || monthNum === 7){
+          datePositions.push(pos);
+          dateLabels.push(allMonthLabels[idx]);
+        }
+      });
+    }else if(allMonthPositions.length > 20){
+      // 21-49個：直近 + 2ヶ月ごと
       const lastIdx = allMonthPositions.length - 1;
       datePositions.push(allMonthPositions[lastIdx]);
       dateLabels.push(allMonthLabels[lastIdx]);
@@ -1219,7 +1229,7 @@ function drawMain(visibleCandles, visibleIndices){
         dateLabels.unshift(allMonthLabels[i]);
       }
     }else{
-      // 20個以下ならすべて表示
+      // 20個以下：すべて表示
       datePositions.push(...allMonthPositions);
       dateLabels.push(...allMonthLabels);
     }
