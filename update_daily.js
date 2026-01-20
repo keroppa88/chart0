@@ -1,12 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-// 設定項目
 const API_KEY = process.env.JQUANTS_API_KEY;
 const API_URL = "https://api.jquants.com/v2";
 const DATA_DIR = path.join(__dirname, 'data');
 
-// 実行時の日本時間（YYYY-MM-DD）を取得
 const today = new Date(Date.now() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
 
 async function updateAllStocks() {
@@ -38,10 +36,8 @@ async function appendDailyData(code) {
             const d = json.data[0];
             const filePath = path.join(DATA_DIR, `${code}.csv`);
             
-            // 追記する1行を作成
             const newLine = `${d.Date},${d.AdjO ?? d.O},${d.AdjH ?? d.H},${d.AdjL ?? d.L},${d.AdjC ?? d.C},${d.AdjVo ?? d.Vo}\n`;
             
-            // 重複チェック後に追記
             const currentContent = fs.readFileSync(filePath, 'utf-8');
             if (!currentContent.includes(d.Date)) {
                 fs.appendFileSync(filePath, newLine);
