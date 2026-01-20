@@ -77,7 +77,7 @@
       </select>
     </div>
 
-    <span id="autoStatus" class="hint">combined_long.csv を自動読込します</span>
+    <span id="autoStatus" class="hint">chartlist.csv を読込中...</span>
     <span id="status" class="hint" style="margin-left:auto;"></span>
   </div>
 
@@ -174,9 +174,9 @@
 - 平日18時頃に自動更新。
 - 銘柄選択は左右矢印で高速切り替え、左右＝1ずつ、上下＝10ずつ。
 - ホイール拡大縮小、ドラッグ左右移動
-- 最初に全データを読み込むことで爆速表示を実現！静的サイトなのに銘柄切り替えが可能。
+- 個別CSVファイルから必要な銘柄だけを読み込むことで爆速表示を実現！
 - テクニカル指標は表示・非表示・場所入れ替えが可能。数値変更で動的描写。
-- 公式JPXAPI→個別CSV→ロングCSVにまとめ→HTMLブラウザアプリで表示。    
+- 公式JPXAPI→個別CSV→HTMLブラウザアプリで表示。    
     </div>
   </div>
 </div>
@@ -185,8 +185,8 @@
 /* =========================
    State
 ========================= */
-let longRows = [];
 let chartListItems = null;
+let symbolCache = new Map(); // code -> series data
 let series = [];
 let displayCount = 100;
 let offsetX = 0;
@@ -239,16 +239,30 @@ function restoreBackBuffers(){
   }catch(e){}
 }
 
-/* =========================
-   現在選択中の銘柄情報
-========================= */
 let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
 
 /* =========================
-   Parsing (TSV/CSV)
+   Data Version (日次キャッシュ用)
 ========================= */
-function toNum(s){ if(s==null) return NaN; return Number(String(s).replace(/,/g,'').replace(/"/g,'').trim()); }
+function yyyymmddJST(){
+  const now = new Date();
+  const jst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+  const y = jst.getFullYear();
+  const m = String(jst.getMonth()+1).padStart(2,'0');
+  const d = String(jst.getDate()).padStart(2,'0');
+  return `${y}${m}${d}`;
+}
+const DATA_VER = yyyymmddJST();
+
+/* =========================
+   Parsing
+========================= */
+function toNum(s){ 
+  if(s==null) return NaN; 
+  return Number(String(s).replace(/,/g,'').replace(/"/g,'').trim()); 
+}
+
 function parseDelimitedLine(line, delim){
   const out=[]; let cur=""; let inQ=false;
   for(const ch of line){
@@ -259,333 +273,284 @@ function parseDelimitedLine(line, delim){
   out.push(cur);
   return out;
 }
+
 function detectDelimiter(headerLine){
   const tabCount=(headerLine.match(/\t/g)||[]).length;
   const commaCount=(headerLine.match(/,/g)||[]).length;
   return tabCount>=commaCount ? "\t" : ",";
 }
-function parseLongFormat(text){
-  const lines=text.trim().split(/\r?\n/);
-  if(lines.length<2) throw new Error("データが空です");
-  const delim=detectDelimiter(lines[0]);
-  const header=parseDelimitedLine(lines[0],delim).map(s=>s.replace(/\r/g,'').trim());
 
-  const idxDate=header.indexOf("日付");
-  const idxName=header.indexOf("商品名");
-  const idxVal=header.indexOf("数値");
-  if(idxDate<0||idxName<0||idxVal<0) throw new Error("必須列(日付, 商品名, 数値)が見つかりません");
-
-  const rows=[];
-  for(let i=1;i<lines.length;i++){
-    const cols=parseDelimitedLine(lines[i],delim);
-    if(!cols || cols.length===0) continue;
-
-    const date=(cols[idxDate]||"").trim();
-    const name=(cols[idxName]||"").trim();
-    const value=toNum(cols[idxVal]);
-    if(!date || !name || Number.isNaN(value)) continue;
-    rows.push({date, name, value});
+// OHLCV形式CSV（Date,Open,High,Low,Close,Volume）をパース
+function parseOHLCVFormat(text){
+  const lines = text.trim().split(/\r?\n/);
+  if(lines.length < 2) return [];
+  
+  const delim = detectDelimiter(lines[0]);
+  const header = parseDelimitedLine(lines[0], delim).map(s=>s.replace(/\r/g,'').trim());
+  
+  // ヘッダーから各列のインデックスを取得
+  const idxDate = header.findIndex(h => /date/i.test(h));
+  const idxOpen = header.findIndex(h => /open/i.test(h));
+  const idxHigh = header.findIndex(h => /high/i.test(h));
+  const idxLow = header.findIndex(h => /low/i.test(h));
+  const idxClose = header.findIndex(h => /close/i.test(h));
+  const idxVolume = header.findIndex(h => /volume/i.test(h));
+  
+  if(idxDate < 0 || idxClose < 0) return [];
+  
+  const rows = [];
+  for(let i = 1; i < lines.length; i++){
+    const cols = parseDelimitedLine(lines[i], delim);
+    if(!cols || cols.length === 0) continue;
+    
+    const date = (cols[idxDate] || "").trim();
+    const open = idxOpen >= 0 ? toNum(cols[idxOpen]) : null;
+    const high = idxHigh >= 0 ? toNum(cols[idxHigh]) : null;
+    const low = idxLow >= 0 ? toNum(cols[idxLow]) : null;
+    const close = toNum(cols[idxClose]);
+    const volume = idxVolume >= 0 ? toNum(cols[idxVolume]) : null;
+    
+    if(!date || Number.isNaN(close)) continue;
+    
+    rows.push({
+      date,
+      open: Number.isNaN(open) ? close : open,
+      high: Number.isNaN(high) ? close : high,
+      low: Number.isNaN(low) ? close : low,
+      close,
+      volume: Number.isNaN(volume) ? null : volume
+    });
   }
+  
   return rows;
 }
 
+// chartlist.csv をパース（code,name形式、ヘッダーなし）
 function parseChartList(text){
   const raw = String(text||"").replace(/\uFEFF/g,'').trim();
   if(!raw) return [];
+  
   const lines = raw.split(/\r?\n/).map(s=>s.trim()).filter(s=>s && !s.startsWith('#'));
-  if(lines.length===0) return [];
+  if(lines.length === 0) return [];
 
-  const first = lines[0];
-  const hasDelim = /[,\t]/.test(first);
-  if(!hasDelim){
-    return lines.map(v => ({value:v, label:v}));
-  }
-
-  const delim = detectDelimiter(first);
-  const firstCols = parseDelimitedLine(first, delim).map(s=>s.trim());
-  const looksLikeHeader = firstCols.some(c => ["value","label","symbol","name"].includes(c.toLowerCase()));
-
-  let start = 0;
-  let idxValue = 0, idxLabel = 1;
-
-  if(looksLikeHeader){
-    idxValue = firstCols.findIndex(c => c.toLowerCase()==="value" || c.toLowerCase()==="symbol" || c.toLowerCase()==="name");
-    idxLabel = firstCols.findIndex(c => c.toLowerCase()==="label");
-    if(idxValue<0) idxValue=0;
-    if(idxLabel<0) idxLabel=idxValue;
-    start = 1;
-  }
-
-  const out=[];
-  for(let i=start;i<lines.length;i++){
-    const cols = parseDelimitedLine(lines[i], delim).map(s=>s.trim());
-    if(!cols || cols.length===0) continue;
-    const value = (cols[idxValue]||"").trim();
-    if(!value) continue;
-    const label = (cols[idxLabel]||value).trim() || value;
-    out.push({value, label});
+  const out = [];
+  for(const line of lines){
+    const parts = line.split(',').map(s=>s.trim());
+    if(parts.length < 2) continue;
+    
+    const code = parts[0];
+    const name = parts[1];
+    if(!code) continue;
+    
+    out.push({ code, name });
   }
   return out;
 }
 
-const OHLC_FIELDS = ["始値","高値","安値","終値"];
-const OHLC_RE = /(始値|高値|安値|終値)$/;
-
-let chartMode = "line";
-let symbolMeta = null;
-
-function splitOhlcName(name){
-  const m = String(name||"").match(OHLC_RE);
-  if(!m) return { base: String(name||""), field: null };
-  return { base: String(name||"").slice(0, -m[1].length), field: m[1] };
+/* =========================
+   CSV Loading
+========================= */
+async function loadSymbolCSV(code){
+  if(symbolCache.has(code)) return symbolCache.get(code);
+  
+  try{
+    const res = await fetch(`./data/${code}.csv?v=${DATA_VER}`);
+    if(!res.ok) throw new Error(`fetch失敗: ${res.status}`);
+    
+    const text = await res.text();
+    const rows = parseOHLCVFormat(text);
+    
+    symbolCache.set(code, rows);
+    return rows;
+  }catch(e){
+    console.error(`${code}.csv の読み込みエラー:`, e);
+    return [];
+  }
 }
 
-function buildSymbolMeta(rows){
-  const allNames = new Set();
-  const baseToFields = new Map();
-  for(const r of rows || []){
-    if(!r || !r.name) continue;
-    allNames.add(r.name);
-    const sp = splitOhlcName(r.name);
-    if(sp.field){
-      if(!baseToFields.has(sp.base)) baseToFields.set(sp.base, new Set());
-      baseToFields.get(sp.base).add(sp.field);
-    }
-  }
-  const candleBaseSet = new Set();
-  for(const [base, fields] of baseToFields.entries()){
-    if(OHLC_FIELDS.every(f => fields.has(f))) candleBaseSet.add(base);
-  }
-  return { allNames, candleBaseSet, baseToFields };
+// 前後の銘柄を先読み（非同期）
+function preloadAdjacentSymbols(currentIndex){
+  if(!chartListItems || chartListItems.length === 0) return;
+  
+  const codes = [
+    chartListItems[currentIndex - 1]?.code,
+    chartListItems[currentIndex + 1]?.code
+  ].filter(c => c && !symbolCache.has(c));
+  
+  codes.forEach(code => {
+    loadSymbolCSV(code).catch(() => {});
+  });
 }
 
+/* =========================
+   UI Population
+========================= */
 function populateSymbolSelect(){
   const sel = document.getElementById('symbolSelect');
   if(!sel) return;
-
+  
   const current = sel.value;
-  if(!symbolMeta) symbolMeta = buildSymbolMeta(longRows);
-
   sel.innerHTML = "";
-
-  if(Array.isArray(chartListItems) && chartListItems.length>0){
-    const added = new Set();
-    for(const item of chartListItems){
-      const value = item?.value;
-      const label = item?.label ?? value;
-      if(!value) continue;
-
-      const ok = symbolMeta.candleBaseSet.has(value) || symbolMeta.allNames.has(value);
-
-      if(!ok){
-        const sp = splitOhlcName(value);
-        if(sp.field && symbolMeta.candleBaseSet.has(sp.base)){
-          if(!added.has(sp.base)){
-            const opt = document.createElement('option');
-            opt.value = sp.base;
-            // 表示は「value,label」形式
-            opt.textContent = value + "," + label;
-            opt.setAttribute('data-display', value + " " + label.replace(/^,/, ''));
-            sel.appendChild(opt);
-            added.add(sp.base);
-          }
-        }
-        continue;
-      }
-
-      if(added.has(value)) continue;
-      const opt = document.createElement('option');
-      opt.value = value;
-      // 表示は「value,label」形式
-      opt.textContent = value + "," + label;
-      opt.setAttribute('data-display', value + " " + label.replace(/^,/, ''));
-      sel.appendChild(opt);
-      added.add(value);
-    }
-
-    if(sel.options.length===0){
-      console.warn("chartlist.csv の銘柄が PtoCSV_long.csv に見つからなかったため、自動列挙にフォールバックします。");
-    }else{
-      if(current && Array.from(sel.options).some(o=>o.value===current)){
-        sel.value = current;
-      }else{
-        sel.selectedIndex = 0;
-      }
-      return;
-    }
-  }
-
-  const candleBases = Array.from(symbolMeta.candleBaseSet).sort((a,b)=>String(a).localeCompare(String(b)));
-  const names = Array.from(symbolMeta.allNames).sort((a,b)=>String(a).localeCompare(String(b)));
-
-  for(const b of candleBases){
+  
+  if(!Array.isArray(chartListItems) || chartListItems.length === 0){
     const opt = document.createElement('option');
-    opt.value = b;
-    opt.textContent = b;
-    opt.setAttribute('data-display', b);
+    opt.value = "";
+    opt.textContent = "銘柄リストが空です";
+    sel.appendChild(opt);
+    return;
+  }
+  
+  for(const item of chartListItems){
+    const opt = document.createElement('option');
+    opt.value = item.code;
+    opt.textContent = `${item.code} ${item.name}`;
     sel.appendChild(opt);
   }
-  for(const n of names){
-    const opt = document.createElement('option');
-    opt.value = n;
-    opt.textContent = n;
-    opt.setAttribute('data-display', n);
-    sel.appendChild(opt);
-  }
-
-  if(current && (symbolMeta.candleBaseSet.has(current) || symbolMeta.allNames.has(current))){
+  
+  if(current && chartListItems.some(item => item.code === current)){
     sel.value = current;
+  }else{
+    sel.selectedIndex = 0;
   }
 }
 
-function buildLineSeriesFromLong(rows, targetName){
-  const map=new Map();
-  for(const r of rows) if(r.name===targetName) map.set(r.date, r.value);
-
-  const dates=Array.from(map.keys()).sort((a,b)=>{
-    const ta=new Date(a).getTime(), tb=new Date(b).getTime();
-    if(!Number.isNaN(ta) && !Number.isNaN(tb)) return ta-tb;
-    return String(a).localeCompare(String(b));
-  });
-
-  return dates.map(d=>{
-    const v=map.get(d);
-    return {date:d, open:v, high:v, low:v, close:v, volume:null};
-  });
-}
-
-function buildOhlcSeriesFromLong(rows, baseName){
-  const names = {
-    open: baseName + "始値",
-    high: baseName + "高値",
-    low:  baseName + "安値",
-    close:baseName + "終値",
-    volume: baseName + "出来高"
-  };
-
-  const byDate = new Map();
-  for(const r of rows || []){
-    if(!r || !r.date) continue;
-    if(r.name!==names.open && r.name!==names.high && r.name!==names.low && r.name!==names.close && r.name!==names.volume) continue;
-
-    if(!byDate.has(r.date)) byDate.set(r.date, {date:r.date, open:null, high:null, low:null, close:null, volume:null});
-    const o = byDate.get(r.date);
-    if(r.name===names.open)  o.open = r.value;
-    if(r.name===names.high)  o.high = r.value;
-    if(r.name===names.low)   o.low  = r.value;
-    if(r.name===names.close) o.close= r.value;
-    if(r.name===names.volume) o.volume = r.value;
+async function autoLoadChartList(){
+  const el = document.getElementById('autoStatus');
+  try{
+    el.textContent = "chartlist.csv を読み込み中...";
+    const res = await fetch('./chartlist.csv');
+    if(!res.ok) throw new Error(`fetch失敗: ${res.status} ${res.statusText}`);
+    
+    const text = await res.text();
+    chartListItems = parseChartList(text);
+    
+    if(!Array.isArray(chartListItems) || chartListItems.length === 0){
+      throw new Error("chartlist.csv が空または形式が不正です");
+    }
+    
+    populateSymbolSelect();
+    el.textContent = `読込完了: ${chartListItems.length}銘柄`;
+    
+    // 初回銘柄を表示
+    await applySymbol();
+  }catch(e){
+    console.error(e);
+    el.textContent = `エラー: ${e.message}`;
   }
-
-  const dates = Array.from(byDate.keys()).sort((a,b)=>{
-    const ta=new Date(a).getTime(), tb=new Date(b).getTime();
-    if(!Number.isNaN(ta) && !Number.isNaN(tb)) return ta-tb;
-    return String(a).localeCompare(String(b));
-  });
-
-  return dates.map(d => byDate.get(d));
 }
 
+/* =========================
+   Technical Indicators
+========================= */
 function calculateMA(data, period){
-  const result=new Array(data.length).fill(null);
-  for(let i=period-1;i<data.length;i++){
-    let sum=0;
-    for(let j=0;j<period;j++) sum += data[i-j].close;
-    result[i]=sum/period;
+  const result = new Array(data.length).fill(null);
+  for(let i = period - 1; i < data.length; i++){
+    let sum = 0;
+    for(let j = 0; j < period; j++) sum += data[i - j].close;
+    result[i] = sum / period;
   }
   return result;
 }
+
 function calculateRSI(data, period){
-  const result=new Array(data.length).fill(null);
+  const result = new Array(data.length).fill(null);
   if(data.length <= period) return result;
 
-  let gains=0, losses=0;
-  for(let i=1;i<=period;i++){
-    const diff=data[i].close - data[i-1].close;
-    if(diff>0) gains += diff; else losses -= diff;
+  let gains = 0, losses = 0;
+  for(let i = 1; i <= period; i++){
+    const diff = data[i].close - data[i - 1].close;
+    if(diff > 0) gains += diff; 
+    else losses -= diff;
   }
-  let avgGain=gains/period;
-  let avgLoss=losses/period;
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
 
-  result[period] = (avgLoss===0) ? 100 : (100 - (100/(1+avgGain/avgLoss)));
+  result[period] = (avgLoss === 0) ? 100 : (100 - (100 / (1 + avgGain / avgLoss)));
 
-  for(let i=period+1;i<data.length;i++){
-    const diff=data[i].close - data[i-1].close;
-    const gain=diff>0?diff:0;
-    const loss=diff<0?-diff:0;
+  for(let i = period + 1; i < data.length; i++){
+    const diff = data[i].close - data[i - 1].close;
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? -diff : 0;
 
-    avgGain=(avgGain*(period-1)+gain)/period;
-    avgLoss=(avgLoss*(period-1)+loss)/period;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
 
-    result[i] = (avgLoss===0) ? 100 : (100 - (100/(1+avgGain/avgLoss)));
+    result[i] = (avgLoss === 0) ? 100 : (100 - (100 / (1 + avgGain / avgLoss)));
   }
   return result;
 }
+
 function calculateMACD(data, shortP, longP, sigP){
-  const macdLine=new Array(data.length).fill(null);
-  const signalLine=new Array(data.length).fill(null);
-  const histogram=new Array(data.length).fill(null);
+  const macdLine = new Array(data.length).fill(null);
+  const signalLine = new Array(data.length).fill(null);
+  const histogram = new Array(data.length).fill(null);
 
-  const kS=2/(shortP+1), kL=2/(longP+1);
+  const kS = 2 / (shortP + 1), kL = 2 / (longP + 1);
 
-  let emaS=data[0].close;
-  let emaL=data[0].close;
+  let emaS = data[0].close;
+  let emaL = data[0].close;
 
-  for(let i=0;i<data.length;i++){
-    const price=data[i].close;
-    if(i===0){ emaS=price; emaL=price; }
-    else{
-      emaS=(price-emaS)*kS+emaS;
-      emaL=(price-emaL)*kL+emaL;
-    }
-    if(i>=longP-1) macdLine[i]=emaS-emaL;
-  }
-
-  const firstValid=longP-1;
-  if(firstValid<0 || firstValid>=data.length) return {macd:macdLine, signal:signalLine, hist:histogram};
-
-  let sigEma=macdLine[firstValid];
-  const kSig=2/(sigP+1);
-
-  for(let i=firstValid;i<data.length;i++){
-    if(i===firstValid){
-      signalLine[i]=macdLine[i];
-      sigEma=macdLine[i];
+  for(let i = 0; i < data.length; i++){
+    const price = data[i].close;
+    if(i === 0){ 
+      emaS = price; 
+      emaL = price; 
     }else{
-      sigEma=(macdLine[i]-sigEma)*kSig+sigEma;
-      signalLine[i]=sigEma;
+      emaS = (price - emaS) * kS + emaS;
+      emaL = (price - emaL) * kL + emaL;
     }
-    histogram[i]=macdLine[i]-signalLine[i];
+    if(i >= longP - 1) macdLine[i] = emaS - emaL;
   }
-  return {macd:macdLine, signal:signalLine, hist:histogram};
+
+  const firstValid = longP - 1;
+  if(firstValid < 0 || firstValid >= data.length) 
+    return { macd: macdLine, signal: signalLine, hist: histogram };
+
+  let sigEma = macdLine[firstValid];
+  const kSig = 2 / (sigP + 1);
+
+  for(let i = firstValid; i < data.length; i++){
+    if(i === firstValid){
+      signalLine[i] = macdLine[i];
+      sigEma = macdLine[i];
+    }else{
+      sigEma = (macdLine[i] - sigEma) * kSig + sigEma;
+      signalLine[i] = sigEma;
+    }
+    histogram[i] = macdLine[i] - signalLine[i];
+  }
+  return { macd: macdLine, signal: signalLine, hist: histogram };
 }
+
 function calculateStochastic(data, kP, dP){
-  const kLine=new Array(data.length).fill(null);
-  const dLine=new Array(data.length).fill(null);
+  const kLine = new Array(data.length).fill(null);
+  const dLine = new Array(data.length).fill(null);
 
-  for(let i=kP-1;i<data.length;i++){
-    let highest=-Infinity, lowest=Infinity;
-    for(let j=0;j<kP;j++){
-      highest=Math.max(highest, data[i-j].high);
-      lowest=Math.min(lowest, data[i-j].low);
+  for(let i = kP - 1; i < data.length; i++){
+    let highest = -Infinity, lowest = Infinity;
+    for(let j = 0; j < kP; j++){
+      highest = Math.max(highest, data[i - j].high);
+      lowest = Math.min(lowest, data[i - j].low);
     }
-    const cur=data[i].close;
-    kLine[i]=(highest!==lowest) ? (((cur-lowest)/(highest-lowest))*100) : 50;
+    const cur = data[i].close;
+    kLine[i] = (highest !== lowest) ? (((cur - lowest) / (highest - lowest)) * 100) : 50;
   }
 
-  for(let i=kP-1+dP-1;i<data.length;i++){
-    let sum=0;
-    for(let j=0;j<dP;j++) sum += kLine[i-j];
-    dLine[i]=sum/dP;
+  for(let i = kP - 1 + dP - 1; i < data.length; i++){
+    let sum = 0;
+    for(let j = 0; j < dP; j++) sum += kLine[i - j];
+    dLine[i] = sum / dP;
   }
-  return {k:kLine, d:dLine};
+  return { k: kLine, d: dLine };
 }
+
 function recomputeIndicators(){
-  if(!series || series.length===0){
-    indicators.ma1=[]; indicators.ma2=[];
-    indicators.rsi=[];
-    indicators.stoch={k:[],d:[]};
-    indicators.macd={macd:[],signal:[],hist:[]};
+  if(!series || series.length === 0){
+    indicators.ma1 = []; 
+    indicators.ma2 = [];
+    indicators.rsi = [];
+    indicators.stoch = { k: [], d: [] };
+    indicators.macd = { macd: [], signal: [], hist: [] };
     return;
   }
   indicators.ma1 = calculateMA(series, params.ma1);
@@ -595,8 +560,11 @@ function recomputeIndicators(){
   indicators.macd = calculateMACD(series, params.macdShort, params.macdLong, params.macdSignal);
 }
 
+/* =========================
+   View Management
+========================= */
 function clampView(){
-  if(!series || series.length===0){
+  if(!series || series.length === 0){
     displayCount = Math.max(10, displayCount);
     offsetX = 0;
     return;
@@ -613,7 +581,6 @@ function getVisibleWindow(){
   clampView();
   const n = series.length;
 
-  // 右スペースを追加する場合は5日分追加
   const extraSpace = rightSpaceEnabled ? 5 : 0;
 
   const startRaw = n - displayCount - offsetX;
@@ -626,15 +593,18 @@ function getVisibleWindow(){
   const realLen = realSlice.length;
 
   const leftPadN = displayCount - realLen;
-  const leftPads = new Array(leftPadN).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null, volume:null}));
+  const leftPads = new Array(leftPadN).fill(null).map(() => ({ 
+    date: "", open: null, high: null, low: null, close: null, volume: null 
+  }));
 
-  // 右スペース用のパディング
-  const rightPads = new Array(extraSpace).fill(null).map(()=>({date:"", open:null, high:null, low:null, close:null, volume:null}));
+  const rightPads = new Array(extraSpace).fill(null).map(() => ({ 
+    date: "", open: null, high: null, low: null, close: null, volume: null 
+  }));
 
   const visibleCandles = leftPads.concat(realSlice, rightPads);
 
   const visibleIndices = new Array(leftPadN).fill(null).concat(
-    Array.from({length: realLen}, (_,i)=> start + i),
+    Array.from({ length: realLen }, (_, i) => start + i),
     new Array(extraSpace).fill(null)
   );
 
@@ -643,85 +613,44 @@ function getVisibleWindow(){
 
 function updateViewInfo(){
   const el = document.getElementById('viewInfo');
-  if(!series || series.length===0){
+  if(!series || series.length === 0){
     el.textContent = `表示本数: ${displayCount} / 表示範囲: -`;
     return;
   }
   const { visibleCandles } = getVisibleWindow();
 
-  let startDate=null, endDate=null;
-  for(let i=0;i<visibleCandles.length;i++){ if(visibleCandles[i].date){ startDate=visibleCandles[i].date; break; } }
-  for(let i=visibleCandles.length-1;i>=0;i--){ if(visibleCandles[i].date){ endDate=visibleCandles[i].date; break; } }
-
-  el.textContent = `表示本数: ${displayCount} / 表示範囲: ${startDate&&endDate ? `${startDate} ~ ${endDate}` : '-'}`;
-}
-
-async function autoLoadChartListFile(){
-  try{
-    const res = await fetch('./chartlist.csv', {cache:'no-store'});
-    if(!res.ok) throw new Error(`fetch失敗: ${res.status} ${res.statusText}`);
-    const text = await res.text();
-    chartListItems = parseChartList(text);
-    if(!Array.isArray(chartListItems) || chartListItems.length===0){
-      chartListItems = null;
-    }
-  }catch(e){
-    console.warn("chartlist.csv を読み込めませんでした（任意ファイル）:", e?.message || e);
-    chartListItems = null;
+  let startDate = null, endDate = null;
+  for(let i = 0; i < visibleCandles.length; i++){ 
+    if(visibleCandles[i].date){ 
+      startDate = visibleCandles[i].date; 
+      break; 
+    } 
   }
-}
-
-async function autoLoadLongFile(){
-  const el=document.getElementById('autoStatus');
-  try{
-    el.textContent="combined_long.csv を読み込み中...";
-    const res=await fetch('./combined_long.csv', {cache:'no-store'});
-    if(!res.ok) throw new Error(`fetch失敗: ${res.status} ${res.statusText}`);
-    const text=await res.text();
-    longRows=parseLongFormat(text);
-    symbolMeta = buildSymbolMeta(longRows);
-    await autoLoadChartListFile();
-    populateSymbolSelect();
-    el.textContent=`ロード完了: ${longRows.length.toLocaleString()}行`;
-    applySymbol();
-  }catch(e){
-    console.error(e);
-    el.textContent=`自動読込エラー: ${e.message}`;
+  for(let i = visibleCandles.length - 1; i >= 0; i--){ 
+    if(visibleCandles[i].date){ 
+      endDate = visibleCandles[i].date; 
+      break; 
+    } 
   }
+
+  el.textContent = `表示本数: ${displayCount} / 表示範囲: ${startDate && endDate ? `${startDate} ~ ${endDate}` : '-'}`;
 }
 
-function applySymbol(){
+/* =========================
+   Symbol Application
+========================= */
+async function applySymbol(){
   const sel = document.getElementById('symbolSelect');
-  const raw = sel?.value || (Array.isArray(chartListItems)&&chartListItems.length>0 ? chartListItems[0].value : "");
+  const code = sel?.value;
   
-  if(!raw) return;
+  if(!code) return;
   
-  // 選択されたオプションのdata-display属性から表示名を取得
   const selectedOption = sel?.selectedOptions?.[0];
-  currentSymbolDisplay = selectedOption?.getAttribute('data-display') || raw;
+  currentSymbolDisplay = selectedOption?.textContent || code;
   
-  if(!symbolMeta) symbolMeta = buildSymbolMeta(longRows);
-
-  let label = raw;
-  let base = null;
-
-  const sp = splitOhlcName(raw);
-  if(sp.field && symbolMeta.candleBaseSet.has(sp.base)){
-    chartMode = "candle";
-    base = sp.base;
-    label = sp.base;
-    series = buildOhlcSeriesFromLong(longRows, sp.base);
-  }else if(symbolMeta.candleBaseSet.has(raw)){
-    chartMode = "candle";
-    base = raw;
-    label = raw;
-    series = buildOhlcSeriesFromLong(longRows, raw);
-  }else{
-    chartMode = "line";
-    base = null;
-    series = buildLineSeriesFromLong(longRows, raw);
-  }
-
+  // CSVを読み込み
+  series = await loadSymbolCSV(code);
+  
   offsetX = 0;
 
   const q = document.getElementById('quickSelect')?.value;
@@ -729,24 +658,30 @@ function applySymbol(){
 
   recomputeIndicators();
 
-  document.getElementById('status').textContent =
-    (series.length>0)
-      ? `${label}: 実データ${series.length}件`
-      : `${label}: データなし`;
+  document.getElementById('status').textContent = 
+    (series.length > 0)
+      ? `${currentSymbolDisplay}: ${series.length}件`
+      : `${currentSymbolDisplay}: データなし`;
 
   updateViewInfo();
   drawChart();
+  
+  // 前後の銘柄を先読み
+  preloadAdjacentSymbols(sel.selectedIndex);
 }
 
+/* =========================
+   Drawing
+========================= */
 function drawChart(){
   if(!mainCanvas) return;
 
-  if(!series || series.length===0){
+  if(!series || series.length === 0){
     resetBackBuffers();
-    mainCtx.clearRect(0,0,mainCanvas.width, mainCanvas.height);
-    mainCtx.fillStyle='#666';
-    mainCtx.textAlign='center';
-    mainCtx.fillText("No Data", mainCanvas.width/2, mainCanvas.height/2);
+    mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+    mainCtx.fillStyle = '#666';
+    mainCtx.textAlign = 'center';
+    mainCtx.fillText("No Data", mainCanvas.width / 2, mainCanvas.height / 2);
     return;
   }
 
@@ -762,60 +697,58 @@ function drawChart(){
 }
 
 function drawMain(visibleCandles, visibleIndices){
-  const ctx=mainCtx;
-  const w=mainCanvas.width, h=mainCanvas.height;
-  const pad={t:20,b:30,l:10,r:60};
-  const chartW=w-pad.l-pad.r;
-  const chartH=h-pad.t-pad.b;
+  const ctx = mainCtx;
+  const w = mainCanvas.width, h = mainCanvas.height;
+  const pad = { t: 20, b: 30, l: 10, r: 60 };
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
 
-  ctx.clearRect(0,0,w,h);
+  ctx.clearRect(0, 0, w, h);
 
-  // 銘柄名を背景として最初に描画（大きく、グレー）
+  // 銘柄名を背景として描画
   if(currentSymbolDisplay){
     ctx.save();
-    ctx.fillStyle='#d0d0d0';
-    ctx.font='bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    ctx.textAlign='left';
-    ctx.textBaseline='top';
+    ctx.fillStyle = '#d0d0d0';
+    ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
     ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
     ctx.restore();
   }
 
-  let minP=Infinity, maxP=-Infinity;
+  let minP = Infinity, maxP = -Infinity;
 
-  visibleIndices.forEach((sIdx, i)=>{
+  visibleIndices.forEach((sIdx, i) => {
     const c = visibleCandles[i];
 
-    if(chartMode==="candle"){
-      if(c.high!=null) maxP=Math.max(maxP, c.high);
-      if(c.low!=null)  minP=Math.min(minP, c.low);
-      if(c.open!=null){ minP=Math.min(minP,c.open); maxP=Math.max(maxP,c.open); }
-      if(c.close!=null){ minP=Math.min(minP,c.close); maxP=Math.max(maxP,c.close); }
-    }else{
-      if(c.close!=null){ minP=Math.min(minP,c.close); maxP=Math.max(maxP,c.close); }
-    }
+    if(c.high != null) maxP = Math.max(maxP, c.high);
+    if(c.low != null) minP = Math.min(minP, c.low);
+    if(c.open != null){ minP = Math.min(minP, c.open); maxP = Math.max(maxP, c.open); }
+    if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
 
-    if(sIdx!=null){
+    if(sIdx != null){
       const m1 = indicators.ma1[sIdx];
       const m2 = indicators.ma2[sIdx];
-      if(m1!=null){ minP=Math.min(minP,m1); maxP=Math.max(maxP,m1); }
-      if(m2!=null){ minP=Math.min(minP,m2); maxP=Math.max(maxP,m2); }
+      if(m1 != null){ minP = Math.min(minP, m1); maxP = Math.max(maxP, m1); }
+      if(m2 != null){ minP = Math.min(minP, m2); maxP = Math.max(maxP, m2); }
     }
   });
 
-  if(minP===Infinity){
-    ctx.fillStyle='#666'; ctx.textAlign='center'; ctx.fillText("No Data", w/2, h/2);
+  if(minP === Infinity){
+    ctx.fillStyle = '#666'; 
+    ctx.textAlign = 'center'; 
+    ctx.fillText("No Data", w / 2, h / 2);
     return;
   }
 
-  const range=(maxP-minP)||1;
-  minP-=range*0.05; maxP+=range*0.05;
-  const scaleY=chartH/(maxP-minP);
+  const range = (maxP - minP) || 1;
+  minP -= range * 0.05; 
+  maxP += range * 0.05;
+  const scaleY = chartH / (maxP - minP);
 
-  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
-  const getY=(val)=>pad.t+chartH-(val-minP)*scaleY;
+  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleCandles.length);
+  const getY = (val) => pad.t + chartH - (val - minP) * scaleY;
 
-  // 価格を適切な単位で丸める関数
   const roundPrice = (price) => {
     if(price < 1000) return Math.round(price / 10) * 10;
     if(price < 3000) return Math.round(price / 50) * 50;
@@ -823,89 +756,84 @@ function drawMain(visibleCandles, visibleIndices){
     return Math.round(price / 500) * 500;
   };
 
-  ctx.strokeStyle='#eee'; ctx.lineWidth=1;
-  const gridSteps=5;
-  for(let i=0;i<=gridSteps;i++){
-    const y=pad.t+(chartH*i/gridSteps);
-    const rawPrice=maxP-(maxP-minP)*(i/gridSteps);
-    const price=roundPrice(rawPrice);
-    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
-    ctx.fillStyle='#666'; ctx.textAlign='left';
-    ctx.fillText(price.toLocaleString(), w-pad.r+5, y+4);
+  ctx.strokeStyle = '#eee'; 
+  ctx.lineWidth = 1;
+  const gridSteps = 5;
+  for(let i = 0; i <= gridSteps; i++){
+    const y = pad.t + (chartH * i / gridSteps);
+    const rawPrice = maxP - (maxP - minP) * (i / gridSteps);
+    const price = roundPrice(rawPrice);
+    ctx.beginPath(); 
+    ctx.moveTo(pad.l, y); 
+    ctx.lineTo(w - pad.r, y); 
+    ctx.stroke();
+    ctx.fillStyle = '#666'; 
+    ctx.textAlign = 'left';
+    ctx.fillText(price.toLocaleString(), w - pad.r + 5, y + 4);
   }
 
-  mainCanvas.candlePositions = visibleCandles.map((c, i)=>({
+  mainCanvas.candlePositions = visibleCandles.map((c, i) => ({
     x: getX(i),
-    w: chartW/visibleCandles.length,
+    w: chartW / visibleCandles.length,
     vIndex: i,
     seriesIndex: visibleIndices[i]
   }));
 
-  visibleCandles.forEach((c,i)=>{
-    if(c.date && i % Math.ceil(visibleCandles.length/6)===0){
-      ctx.fillStyle='#999';
-      ctx.textAlign='center';
-      ctx.fillText(c.date, getX(i), h-5);
+  visibleCandles.forEach((c, i) => {
+    if(c.date && i % Math.ceil(visibleCandles.length / 6) === 0){
+      ctx.fillStyle = '#999';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.date, getX(i), h - 5);
     }
   });
 
-  if(chartMode==="candle"){
-    const bodyW=(chartW/visibleCandles.length)*0.6;
-    ctx.lineWidth=1;
+  // ローソク足描画
+  const bodyW = (chartW / visibleCandles.length) * 0.6;
+  ctx.lineWidth = 1;
 
-    visibleCandles.forEach((c,i)=>{
-      if(c.open==null || c.high==null || c.low==null || c.close==null) return;
+  visibleCandles.forEach((c, i) => {
+    if(c.open == null || c.high == null || c.low == null || c.close == null) return;
 
-      const x=getX(i);
-      const yH=getY(c.high);
-      const yL=getY(c.low);
-      const yO=getY(c.open);
-      const yC=getY(c.close);
+    const x = getX(i);
+    const yH = getY(c.high);
+    const yL = getY(c.low);
+    const yO = getY(c.open);
+    const yC = getY(c.close);
 
-      const up = c.close >= c.open;
-      const col = up ? '#26a69a' : '#ef5350';
+    const up = c.close >= c.open;
+    const col = up ? '#26a69a' : '#ef5350';
 
-      ctx.strokeStyle=col;
-      ctx.beginPath();
-      ctx.moveTo(x, yH);
-      ctx.lineTo(x, yL);
-      ctx.stroke();
-
-      const top = Math.min(yO, yC);
-      const bot = Math.max(yO, yC);
-      const height = Math.max(1, bot-top);
-
-      ctx.fillStyle=col;
-      ctx.fillRect(x - bodyW/2, top, bodyW, height);
-
-      ctx.strokeStyle=col;
-      ctx.strokeRect(x - bodyW/2, top, bodyW, height);
-    });
-
-  }else{
-    ctx.strokeStyle='#333'; ctx.lineWidth=1.8;
+    ctx.strokeStyle = col;
     ctx.beginPath();
-    let moved=false;
-    visibleCandles.forEach((c,i)=>{
-      if(c.close==null){ moved=false; return; }
-      const x=getX(i), y=getY(c.close);
-      if(!moved){ ctx.moveTo(x,y); moved=true; } else ctx.lineTo(x,y);
-    });
+    ctx.moveTo(x, yH);
+    ctx.lineTo(x, yL);
     ctx.stroke();
-  }
+
+    const top = Math.min(yO, yC);
+    const bot = Math.max(yO, yC);
+    const height = Math.max(1, bot - top);
+
+    ctx.fillStyle = col;
+    ctx.fillRect(x - bodyW / 2, top, bodyW, height);
+
+    ctx.strokeStyle = col;
+    ctx.strokeRect(x - bodyW / 2, top, bodyW, height);
+  });
 
   const drawLine = (arr, color) => {
-    ctx.strokeStyle=color; ctx.lineWidth=1.5;
+    ctx.strokeStyle = color; 
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    let m=false;
-    visibleIndices.forEach((sIdx, i)=>{
-      if(sIdx==null){ m=false; return; }
-      const v=arr[sIdx];
-      if(v!=null){
-        const x=getX(i), y=getY(v);
-        if(!m){ ctx.moveTo(x,y); m=true; } else ctx.lineTo(x,y);
+    let m = false;
+    visibleIndices.forEach((sIdx, i) => {
+      if(sIdx == null){ m = false; return; }
+      const v = arr[sIdx];
+      if(v != null){
+        const x = getX(i), y = getY(v);
+        if(!m){ ctx.moveTo(x, y); m = true; } 
+        else ctx.lineTo(x, y);
       }else{
-        m=false;
+        m = false;
       }
     });
     ctx.stroke();
@@ -916,200 +844,224 @@ function drawMain(visibleCandles, visibleIndices){
 
 function drawVolume(visibleCandles, visibleIndices){
   if(collapsed.volume) return;
-  const ctx=volumeCtx;
-  const w=volumeCanvas.width, h=volumeCanvas.height;
-  const pad={t:10,b:10,l:10,r:60};
-  const chartW=w-pad.l-pad.r;
-  const chartH=h-pad.t-pad.b;
-  ctx.clearRect(0,0,w,h);
+  const ctx = volumeCtx;
+  const w = volumeCanvas.width, h = volumeCanvas.height;
+  const pad = { t: 10, b: 10, l: 10, r: 60 };
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  ctx.clearRect(0, 0, w, h);
 
-  let maxVol=0;
-  visibleCandles.forEach(c=>{
-    if(c.volume!=null && c.volume>maxVol) maxVol=c.volume;
+  let maxVol = 0;
+  visibleCandles.forEach(c => {
+    if(c.volume != null && c.volume > maxVol) maxVol = c.volume;
   });
 
-  if(maxVol===0) maxVol=1;
-  const scaleY=chartH/maxVol;
+  if(maxVol === 0) maxVol = 1;
+  const scaleY = chartH / maxVol;
 
-  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleCandles.length);
-  const getY=(vol)=>pad.t+chartH-(vol*scaleY);
+  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleCandles.length);
+  const getY = (vol) => pad.t + chartH - (vol * scaleY);
 
-  const barW=(chartW/visibleCandles.length)*0.7;
+  const barW = (chartW / visibleCandles.length) * 0.7;
 
-  visibleCandles.forEach((c,i)=>{
-    if(c.volume==null || c.volume===0) return;
+  visibleCandles.forEach((c, i) => {
+    if(c.volume == null || c.volume === 0) return;
     
-    const x=getX(i);
-    const y=getY(c.volume);
-    const y0=pad.t+chartH;
+    const x = getX(i);
+    const y = getY(c.volume);
+    const y0 = pad.t + chartH;
 
-    // 出来高の色: 陽線なら緑、陰線なら赤、判定不可なら灰色
-    let color='#999';
-    if(c.open!=null && c.close!=null){
+    let color = '#999';
+    if(c.open != null && c.close != null){
       color = c.close >= c.open ? '#26a69a' : '#ef5350';
     }
 
-    ctx.fillStyle=color;
-    ctx.fillRect(x-barW/2, y, barW, y0-y);
+    ctx.fillStyle = color;
+    ctx.fillRect(x - barW / 2, y, barW, y0 - y);
   });
 
-  ctx.fillStyle='#666'; ctx.textAlign='left';
+  ctx.fillStyle = '#666'; 
+  ctx.textAlign = 'left';
   ctx.fillText(`出来高`, 5, 10);
 }
 
 function drawMacd(visibleIndices){
   if(collapsed.macd) return;
-  const ctx=macdCtx;
-  const w=macdCanvas.width, h=macdCanvas.height;
-  const pad={t:10,b:10,l:10,r:60};
-  const chartW=w-pad.l-pad.r;
-  const chartH=h-pad.t-pad.b;
-  ctx.clearRect(0,0,w,h);
+  const ctx = macdCtx;
+  const w = macdCanvas.width, h = macdCanvas.height;
+  const pad = { t: 10, b: 10, l: 10, r: 60 };
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  ctx.clearRect(0, 0, w, h);
 
-  const data=indicators.macd;
-  let minV=Infinity, maxV=-Infinity;
+  const data = indicators.macd;
+  let minV = Infinity, maxV = -Infinity;
 
-  visibleIndices.forEach(sIdx=>{
-    if(sIdx==null) return;
-    const m=data.macd[sIdx], s=data.signal[sIdx], hi=data.hist[sIdx];
-    if(m!=null){ minV=Math.min(minV,m); maxV=Math.max(maxV,m); }
-    if(s!=null){ minV=Math.min(minV,s); maxV=Math.max(maxV,s); }
-    if(hi!=null){ minV=Math.min(minV,hi); maxV=Math.max(maxV,hi); }
+  visibleIndices.forEach(sIdx => {
+    if(sIdx == null) return;
+    const m = data.macd[sIdx], s = data.signal[sIdx], hi = data.hist[sIdx];
+    if(m != null){ minV = Math.min(minV, m); maxV = Math.max(maxV, m); }
+    if(s != null){ minV = Math.min(minV, s); maxV = Math.max(maxV, s); }
+    if(hi != null){ minV = Math.min(minV, hi); maxV = Math.max(maxV, hi); }
   });
 
-  if(minV===Infinity){ minV=-1; maxV=1; }
-  const range=Math.max(0.0001, maxV-minV);
-  const scaleY=chartH/range;
+  if(minV === Infinity){ minV = -1; maxV = 1; }
+  const range = Math.max(0.0001, maxV - minV);
+  const scaleY = chartH / range;
 
-  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleIndices.length);
-  const getY=(v)=>pad.t+chartH-(v-minV)*scaleY;
+  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
+  const getY = (v) => pad.t + chartH - (v - minV) * scaleY;
 
-  const y0=getY(0);
-  ctx.strokeStyle='#ccc'; ctx.beginPath(); ctx.moveTo(pad.l,y0); ctx.lineTo(w-pad.r,y0); ctx.stroke();
+  const y0 = getY(0);
+  ctx.strokeStyle = '#ccc'; 
+  ctx.beginPath(); 
+  ctx.moveTo(pad.l, y0); 
+  ctx.lineTo(w - pad.r, y0); 
+  ctx.stroke();
 
-  const barW=(chartW/visibleIndices.length)*0.7;
-  visibleIndices.forEach((sIdx,i)=>{
-    if(sIdx==null) return;
-    const v=data.hist[sIdx];
-    if(v!=null){
-      const x=getX(i), y=getY(v);
-      ctx.fillStyle=v>=0?'#26a69a':'#ef5350';
-      ctx.fillRect(x-barW/2, Math.min(y,y0), barW, Math.abs(y-y0));
+  const barW = (chartW / visibleIndices.length) * 0.7;
+  visibleIndices.forEach((sIdx, i) => {
+    if(sIdx == null) return;
+    const v = data.hist[sIdx];
+    if(v != null){
+      const x = getX(i), y = getY(v);
+      ctx.fillStyle = v >= 0 ? '#26a69a' : '#ef5350';
+      ctx.fillRect(x - barW / 2, Math.min(y, y0), barW, Math.abs(y - y0));
     }
   });
 
-  const drawLine=(arr,color)=>{
-    ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  const drawLine = (arr, color) => {
+    ctx.strokeStyle = color; 
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    let m=false;
-    visibleIndices.forEach((sIdx,i)=>{
-      if(sIdx==null){ m=false; return; }
-      const v=arr[sIdx];
-      if(v!=null){
-        const x=getX(i), y=getY(v);
-        if(!m){ ctx.moveTo(x,y); m=true; } else ctx.lineTo(x,y);
-      }else m=false;
+    let m = false;
+    visibleIndices.forEach((sIdx, i) => {
+      if(sIdx == null){ m = false; return; }
+      const v = arr[sIdx];
+      if(v != null){
+        const x = getX(i), y = getY(v);
+        if(!m){ ctx.moveTo(x, y); m = true; } 
+        else ctx.lineTo(x, y);
+      }else m = false;
     });
     ctx.stroke();
   };
-  drawLine(data.macd,'#2196f3');
-  drawLine(data.signal,'#ff9800');
+  drawLine(data.macd, '#2196f3');
+  drawLine(data.signal, '#ff9800');
 
-  ctx.fillStyle='#666'; ctx.textAlign='left';
+  ctx.fillStyle = '#666'; 
+  ctx.textAlign = 'left';
   ctx.fillText(`MACD(${params.macdShort},${params.macdLong},${params.macdSignal})`, 5, 10);
 }
 
 function drawStoch(visibleIndices){
   if(collapsed.stoch) return;
-  const ctx=stochCtx;
-  const w=stochCanvas.width, h=stochCanvas.height;
-  const pad={t:10,b:10,l:10,r:60};
-  const chartW=w-pad.l-pad.r;
-  const chartH=h-pad.t-pad.b;
-  ctx.clearRect(0,0,w,h);
+  const ctx = stochCtx;
+  const w = stochCanvas.width, h = stochCanvas.height;
+  const pad = { t: 10, b: 10, l: 10, r: 60 };
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  ctx.clearRect(0, 0, w, h);
 
-  const data=indicators.stoch;
-  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleIndices.length);
-  const getY=(v)=>pad.t+chartH-(v/100)*chartH;
+  const data = indicators.stoch;
+  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
+  const getY = (v) => pad.t + chartH - (v / 100) * chartH;
 
-  ctx.strokeStyle='#eee'; ctx.setLineDash([4,4]);
-  [20,80].forEach(level=>{
-    const y=getY(level);
-    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+  ctx.strokeStyle = '#eee'; 
+  ctx.setLineDash([4, 4]);
+  [20, 80].forEach(level => {
+    const y = getY(level);
+    ctx.beginPath(); 
+    ctx.moveTo(pad.l, y); 
+    ctx.lineTo(w - pad.r, y); 
+    ctx.stroke();
   });
   ctx.setLineDash([]);
 
-  const drawLine=(arr,color)=>{
-    ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  const drawLine = (arr, color) => {
+    ctx.strokeStyle = color; 
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    let m=false;
-    visibleIndices.forEach((sIdx,i)=>{
-      if(sIdx==null){ m=false; return; }
-      const v=arr[sIdx];
-      if(v!=null){
-        const x=getX(i), y=getY(v);
-        if(!m){ ctx.moveTo(x,y); m=true; } else ctx.lineTo(x,y);
-      }else m=false;
+    let m = false;
+    visibleIndices.forEach((sIdx, i) => {
+      if(sIdx == null){ m = false; return; }
+      const v = arr[sIdx];
+      if(v != null){
+        const x = getX(i), y = getY(v);
+        if(!m){ ctx.moveTo(x, y); m = true; } 
+        else ctx.lineTo(x, y);
+      }else m = false;
     });
     ctx.stroke();
   };
-  drawLine(data.k,'#00bcd4');
-  drawLine(data.d,'#ff5722');
+  drawLine(data.k, '#00bcd4');
+  drawLine(data.d, '#ff5722');
 
-  ctx.fillStyle='#666'; ctx.textAlign='left';
+  ctx.fillStyle = '#666'; 
+  ctx.textAlign = 'left';
   ctx.fillText(`Stoch(${params.stochK},${params.stochD})`, 5, 10);
 }
 
 function drawRsi(visibleIndices){
   if(collapsed.rsi) return;
-  const ctx=rsiCtx;
-  const w=rsiCanvas.width, h=rsiCanvas.height;
-  const pad={t:10,b:10,l:10,r:60};
-  const chartW=w-pad.l-pad.r;
-  const chartH=h-pad.t-pad.b;
-  ctx.clearRect(0,0,w,h);
+  const ctx = rsiCtx;
+  const w = rsiCanvas.width, h = rsiCanvas.height;
+  const pad = { t: 10, b: 10, l: 10, r: 60 };
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  ctx.clearRect(0, 0, w, h);
 
-  const data=indicators.rsi;
-  const getX=(i)=>pad.l+(i+0.5)*(chartW/visibleIndices.length);
-  const getY=(v)=>pad.t+chartH-(v/100)*chartH;
+  const data = indicators.rsi;
+  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
+  const getY = (v) => pad.t + chartH - (v / 100) * chartH;
 
-  ctx.fillStyle='rgba(156, 39, 176, 0.05)';
-  const y70=getY(70), y30=getY(30);
-  ctx.fillRect(pad.l,y70,chartW,y30-y70);
+  ctx.fillStyle = 'rgba(156, 39, 176, 0.05)';
+  const y70 = getY(70), y30 = getY(30);
+  ctx.fillRect(pad.l, y70, chartW, y30 - y70);
 
-  ctx.strokeStyle='#ccc'; ctx.setLineDash([4,4]);
-  [30,70].forEach(level=>{
-    const y=getY(level);
-    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke();
+  ctx.strokeStyle = '#ccc'; 
+  ctx.setLineDash([4, 4]);
+  [30, 70].forEach(level => {
+    const y = getY(level);
+    ctx.beginPath(); 
+    ctx.moveTo(pad.l, y); 
+    ctx.lineTo(w - pad.r, y); 
+    ctx.stroke();
   });
   ctx.setLineDash([]);
 
-  ctx.strokeStyle='#9c27b0'; ctx.lineWidth=1.5;
+  ctx.strokeStyle = '#9c27b0'; 
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  let m=false;
-  visibleIndices.forEach((sIdx,i)=>{
-    if(sIdx==null){ m=false; return; }
-    const v=data[sIdx];
-    if(v!=null){
-      const x=getX(i), y=getY(v);
-      if(!m){ ctx.moveTo(x,y); m=true; } else ctx.lineTo(x,y);
-    }else m=false;
+  let m = false;
+  visibleIndices.forEach((sIdx, i) => {
+    if(sIdx == null){ m = false; return; }
+    const v = data[sIdx];
+    if(v != null){
+      const x = getX(i), y = getY(v);
+      if(!m){ ctx.moveTo(x, y); m = true; } 
+      else ctx.lineTo(x, y);
+    }else m = false;
   });
   ctx.stroke();
 
-  ctx.fillStyle='#666'; ctx.textAlign='left';
+  ctx.fillStyle = '#666'; 
+  ctx.textAlign = 'left';
   ctx.fillText(`RSI(${params.rsi})`, 5, 10);
 }
 
 function drawCrosshair(x){
   restoreBackBuffers();
-  if(x<0) return;
-  const draw=(ctx,h)=>{
+  if(x < 0) return;
+  const draw = (ctx, h) => {
     if(!ctx) return;
     ctx.save();
-    ctx.strokeStyle='#999';
-    ctx.setLineDash([3,3]);
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+    ctx.strokeStyle = '#999';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); 
+    ctx.moveTo(x, 0); 
+    ctx.lineTo(x, h); 
+    ctx.stroke();
     ctx.restore();
   };
   draw(mainCtx, mainCanvas.height);
@@ -1120,42 +1072,40 @@ function drawCrosshair(x){
 }
 
 function handleTooltip(e, canvas){
-  if(!mainCanvas.candlePositions || !series || series.length===0) return;
+  if(!mainCanvas.candlePositions || !series || series.length === 0) return;
 
-  const rect=canvas.getBoundingClientRect();
-  const mouseX=e.clientX-rect.left;
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
 
-  const p = mainCanvas.candlePositions.find(pp => mouseX >= pp.x - pp.w/2 && mouseX <= pp.x + pp.w/2);
+  const p = mainCanvas.candlePositions.find(pp => 
+    mouseX >= pp.x - pp.w / 2 && mouseX <= pp.x + pp.w / 2
+  );
   if(!p){
-    tooltip.style.display='none';
+    tooltip.style.display = 'none';
     drawCrosshair(-1);
     return;
   }
 
   const sIdx = p.seriesIndex;
-  if(sIdx==null){
-    tooltip.style.display='none';
+  if(sIdx == null){
+    tooltip.style.display = 'none';
     drawCrosshair(p.x);
     return;
   }
 
   const c = series[sIdx];
-  const fmt=n => (n!==null && n!==undefined && !Number.isNaN(n))
-    ? n.toLocaleString(undefined,{maximumFractionDigits:2})
+  const fmt = n => (n !== null && n !== undefined && !Number.isNaN(n))
+    ? n.toLocaleString(undefined, { maximumFractionDigits: 2 })
     : '-';
 
-  const ma1=indicators.ma1[sIdx], ma2=indicators.ma2[sIdx];
-  const rsi=indicators.rsi[sIdx];
-  const stK=indicators.stoch.k[sIdx], stD=indicators.stoch.d[sIdx];
-  const macd=indicators.macd.macd[sIdx], sig=indicators.macd.signal[sIdx];
+  const ma1 = indicators.ma1[sIdx], ma2 = indicators.ma2[sIdx];
+  const rsi = indicators.rsi[sIdx];
+  const stK = indicators.stoch.k[sIdx], stD = indicators.stoch.d[sIdx];
+  const macd = indicators.macd.macd[sIdx], sig = indicators.macd.signal[sIdx];
 
-  let html=`<strong>${c.date}</strong><br>`;
-  if(chartMode==="candle"){
-    html += `始:${fmt(c.open)} 高:${fmt(c.high)} 安:${fmt(c.low)} 終:${fmt(c.close)}<br>`;
-  }else{
-    html += `値:${fmt(c.close)}<br>`;
-  }
-  if(c.volume!=null){
+  let html = `<strong>${c.date}</strong><br>`;
+  html += `始:${fmt(c.open)} 高:${fmt(c.high)} 安:${fmt(c.low)} 終:${fmt(c.close)}<br>`;
+  if(c.volume != null){
     html += `出来高:${fmt(c.volume)}<br>`;
   }
   html += `<span style="color:#ff9800">MA${params.ma1}:${fmt(ma1)}</span> <span style="color:#2196f3">MA${params.ma2}:${fmt(ma2)}</span><br>`;
@@ -1163,20 +1113,23 @@ function handleTooltip(e, canvas){
   html += `<span style="color:#00bcd4">K:${fmt(stK)}</span> <span style="color:#ff5722">D:${fmt(stD)}</span><br>`;
   html += `MACD:${fmt(macd)} Sig:${fmt(sig)}`;
 
-  tooltip.innerHTML=html;
-  tooltip.style.display='block';
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
 
-  let tx=e.clientX+15, ty=e.clientY+15;
-  if(tx+150>window.innerWidth) tx-=160;
-  tooltip.style.left=tx+'px';
-  tooltip.style.top=ty+'px';
+  let tx = e.clientX + 15, ty = e.clientY + 15;
+  if(tx + 150 > window.innerWidth) tx -= 160;
+  tooltip.style.left = tx + 'px';
+  tooltip.style.top = ty + 'px';
 
   drawCrosshair(p.x);
 }
 
+/* =========================
+   Interaction
+========================= */
 function onWheelZoom(e){
   e.preventDefault();
-  if(!series || series.length===0) return;
+  if(!series || series.length === 0) return;
 
   const shrink = (e.deltaY < 0);
 
@@ -1192,14 +1145,15 @@ function onWheelZoom(e){
 }
 
 function onMouseDown(e, cvs){
-  if(!series || series.length===0) return;
+  if(!series || series.length === 0) return;
   isDragging = true;
   dragStartX = e.clientX;
   dragStartOffset = offsetX;
   document.body.style.cursor = 'grabbing';
 }
+
 function onMouseMove(e, cvs){
-  if(!series || series.length===0) return;
+  if(!series || series.length === 0) return;
 
   if(isDragging){
     const rect = cvs.getBoundingClientRect();
@@ -1219,41 +1173,44 @@ function onMouseMove(e, cvs){
     handleTooltip(e, cvs);
   }
 }
+
 function onMouseUp(){
   isDragging = false;
   document.body.style.cursor = 'default';
 }
+
 function onMouseLeave(){
   if(isDragging) onMouseUp();
-  tooltip.style.display='none';
+  tooltip.style.display = 'none';
   drawCrosshair(-1);
 }
 
 function toggleIndicator(key){
-  collapsed[key]=!collapsed[key];
-  const wrapper=document.getElementById(key+'Wrapper');
-  const collapseBtn=document.getElementById(key+'CollapseBtn');
-  const expandBtn=document.getElementById(key+'ExpandBtn');
+  collapsed[key] = !collapsed[key];
+  const wrapper = document.getElementById(key + 'Wrapper');
+  const collapseBtn = document.getElementById(key + 'CollapseBtn');
+  const expandBtn = document.getElementById(key + 'ExpandBtn');
   
-  if(collapsed[key]) {
+  if(collapsed[key]){
     wrapper.classList.add('collapsed');
-    collapseBtn.style.display='none';
-    expandBtn.style.display='flex';
-  } else {
+    collapseBtn.style.display = 'none';
+    expandBtn.style.display = 'flex';
+  }else{
     wrapper.classList.remove('collapsed');
-    collapseBtn.style.display='flex';
-    expandBtn.style.display='none';
+    collapseBtn.style.display = 'flex';
+    expandBtn.style.display = 'none';
   }
   setTimeout(resizeCanvas, 210);
 }
+
 function moveIndicator(key, dir){
-  const container=document.getElementById(key+'Container');
-  const parent=document.getElementById('indicatorsList');
-  if(dir==='up'){
-    const prev=container.previousElementSibling;
+  const container = document.getElementById(key + 'Container');
+  const parent = document.getElementById('indicatorsList');
+  if(dir === 'up'){
+    const prev = container.previousElementSibling;
     if(prev) parent.insertBefore(container, prev);
   }else{
-    const next=container.nextElementSibling;
+    const next = container.nextElementSibling;
     if(next) parent.insertBefore(next, container);
   }
   setTimeout(resizeCanvas, 0);
@@ -1261,56 +1218,73 @@ function moveIndicator(key, dir){
 
 function resizeCanvas(){
   resetBackBuffers();
-  const resize=(c)=>{
+  const resize = (c) => {
     if(!c) return;
-    const rect=c.getBoundingClientRect();
-    c.width=rect.width; c.height=rect.height;
+    const rect = c.getBoundingClientRect();
+    c.width = rect.width; 
+    c.height = rect.height;
   };
-  resize(mainCanvas); resize(volumeCanvas); resize(macdCanvas); resize(stochCanvas); resize(rsiCanvas);
+  resize(mainCanvas); 
+  resize(volumeCanvas); 
+  resize(macdCanvas); 
+  resize(stochCanvas); 
+  resize(rsiCanvas);
   drawChart();
 }
 
+/* =========================
+   Event Setup
+========================= */
 function setupEventListeners(){
-  const helpBtn=document.getElementById('helpBtn');
-  const helpModal=document.getElementById('helpModal');
-  const helpCloseBtn=document.getElementById('helpCloseBtn');
-  const openHelp=()=>{ helpModal.style.display='flex'; helpModal.setAttribute('aria-hidden','false'); };
-  const closeHelp=()=>{ helpModal.style.display='none'; helpModal.setAttribute('aria-hidden','true'); };
+  const helpBtn = document.getElementById('helpBtn');
+  const helpModal = document.getElementById('helpModal');
+  const helpCloseBtn = document.getElementById('helpCloseBtn');
+  const openHelp = () => { 
+    helpModal.style.display = 'flex'; 
+    helpModal.setAttribute('aria-hidden', 'false'); 
+  };
+  const closeHelp = () => { 
+    helpModal.style.display = 'none'; 
+    helpModal.setAttribute('aria-hidden', 'true'); 
+  };
   helpBtn.addEventListener('click', openHelp);
   helpCloseBtn.addEventListener('click', closeHelp);
-  helpModal.addEventListener('click', (e)=>{ if(e.target===helpModal) closeHelp(); });
-  window.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && helpModal.style.display==='flex') closeHelp(); });
+  helpModal.addEventListener('click', (e) => { 
+    if(e.target === helpModal) closeHelp(); 
+  });
+  window.addEventListener('keydown', (e) => { 
+    if(e.key === 'Escape' && helpModal.style.display === 'flex') closeHelp(); 
+  });
 
-  document.getElementById('symbolSelect')?.addEventListener('change', ()=>applySymbol());
+  document.getElementById('symbolSelect')?.addEventListener('change', () => applySymbol());
 
-  // 銘柄選択で矢印キー操作
-  document.getElementById('symbolSelect')?.addEventListener('keydown', (e)=>{
+  document.getElementById('symbolSelect')?.addEventListener('keydown', (e) => {
     const sel = e.target;
     const currentIndex = sel.selectedIndex;
     const maxIndex = sel.options.length - 1;
     let newIndex = currentIndex;
 
-    if(e.key === 'ArrowRight') {
+    if(e.key === 'ArrowRight'){
       e.preventDefault();
       newIndex = Math.min(currentIndex + 1, maxIndex);
-    } else if(e.key === 'ArrowLeft') {
+    }else if(e.key === 'ArrowLeft'){
       e.preventDefault();
       newIndex = Math.max(currentIndex - 1, 0);
-    } else if(e.key === 'ArrowDown') {
+    }else if(e.key === 'ArrowDown'){
       e.preventDefault();
       newIndex = Math.min(currentIndex + 10, maxIndex);
-    } else if(e.key === 'ArrowUp') {
+    }else if(e.key === 'ArrowUp'){
       e.preventDefault();
       newIndex = Math.max(currentIndex - 10, 0);
     }
 
-    if(newIndex !== currentIndex) {
+    if(newIndex !== currentIndex){
       sel.selectedIndex = newIndex;
       applySymbol();
     }
   });
 
-  document.getElementById('quickSelect')?.addEventListener('change', (e)=>{
+  document.getElementById('quickSelect')?.addEventListener('change', (e) => {
     const v = e.target.value;
     if(!v) return;
     displayCount = parseInt(v, 10);
@@ -1320,41 +1294,40 @@ function setupEventListeners(){
     drawChart();
   });
 
-  // 右スペースチェックボックス
-  document.getElementById('rightSpaceCheck')?.addEventListener('change', (e)=>{
+  document.getElementById('rightSpaceCheck')?.addEventListener('change', (e) => {
     rightSpaceEnabled = e.target.checked;
     drawChart();
   });
 
-  const inputs=document.querySelectorAll('.param-group input');
-  inputs.forEach(inp=>{
-    inp.addEventListener('change', e=>{
-      const id=e.target.id;
-      const val=parseInt(e.target.value,10);
-      if(!(val>0)) return;
+  const inputs = document.querySelectorAll('.param-group input');
+  inputs.forEach(inp => {
+    inp.addEventListener('change', e => {
+      const id = e.target.id;
+      const val = parseInt(e.target.value, 10);
+      if(!(val > 0)) return;
 
-      if(id==='ma1Period') params.ma1=val;
-      if(id==='ma2Period') params.ma2=val;
-      if(id==='rsiPeriod') params.rsi=val;
-      if(id==='stochK') params.stochK=val;
-      if(id==='stochD') params.stochD=val;
-      if(id==='macdShort') params.macdShort=val;
-      if(id==='macdLong') params.macdLong=val;
-      if(id==='macdSignal') params.macdSignal=val;
+      if(id === 'ma1Period') params.ma1 = val;
+      if(id === 'ma2Period') params.ma2 = val;
+      if(id === 'rsiPeriod') params.rsi = val;
+      if(id === 'stochK') params.stochK = val;
+      if(id === 'stochD') params.stochD = val;
+      if(id === 'macdShort') params.macdShort = val;
+      if(id === 'macdLong') params.macdLong = val;
+      if(id === 'macdSignal') params.macdSignal = val;
 
       recomputeIndicators();
       drawChart();
     });
   });
 
-  const canvases=[mainCanvas, volumeCanvas, macdCanvas, stochCanvas, rsiCanvas];
-  canvases.forEach(cvs=>{
+  const canvases = [mainCanvas, volumeCanvas, macdCanvas, stochCanvas, rsiCanvas];
+  canvases.forEach(cvs => {
     if(!cvs) return;
 
-    cvs.addEventListener('wheel', onWheelZoom, {passive:false});
+    cvs.addEventListener('wheel', onWheelZoom, { passive: false });
 
-    cvs.addEventListener('mousedown', (e)=>onMouseDown(e, cvs));
-    cvs.addEventListener('mousemove', (e)=>onMouseMove(e, cvs));
+    cvs.addEventListener('mousedown', (e) => onMouseDown(e, cvs));
+    cvs.addEventListener('mousemove', (e) => onMouseMove(e, cvs));
     cvs.addEventListener('mouseup', onMouseUp);
     cvs.addEventListener('mouseleave', onMouseLeave);
   });
@@ -1362,33 +1335,33 @@ function setupEventListeners(){
   window.addEventListener('resize', resizeCanvas);
 }
 
+/* =========================
+   Init
+========================= */
 function init(){
-  mainCanvas=document.getElementById('mainChart');
-  mainCtx=mainCanvas.getContext('2d');
+  mainCanvas = document.getElementById('mainChart');
+  mainCtx = mainCanvas.getContext('2d');
 
-  volumeCanvas=document.getElementById('volumeChart');
-  volumeCtx=volumeCanvas.getContext('2d');
+  volumeCanvas = document.getElementById('volumeChart');
+  volumeCtx = volumeCanvas.getContext('2d');
 
-  macdCanvas=document.getElementById('macdChart');
-  macdCtx=macdCanvas.getContext('2d');
+  macdCanvas = document.getElementById('macdChart');
+  macdCtx = macdCanvas.getContext('2d');
 
-  stochCanvas=document.getElementById('stochChart');
-  stochCtx=stochCanvas.getContext('2d');
+  stochCanvas = document.getElementById('stochChart');
+  stochCtx = stochCanvas.getContext('2d');
 
-  rsiCanvas=document.getElementById('rsiChart');
-  rsiCtx=rsiCanvas.getContext('2d');
+  rsiCanvas = document.getElementById('rsiChart');
+  rsiCtx = rsiCanvas.getContext('2d');
 
-  tooltip=document.getElementById('tooltip');
+  tooltip = document.getElementById('tooltip');
 
   setupEventListeners();
   resizeCanvas();
-  autoLoadLongFile();
+  autoLoadChartList();
 }
 
 window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
-
-
