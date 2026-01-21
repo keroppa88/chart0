@@ -1076,20 +1076,28 @@ function drawMain(visibleCandles, visibleIndices){
     console.log('series.length:', series.length);
     console.log('compareSeries.length:', compareSeries.length);
     
+    // 比較銘柄の日付→インデックスマップを作成
+    const compareSeriesDateMap = new Map();
+    compareSeries.forEach((item, idx) => {
+      if(item && item.date) {
+        compareSeriesDateMap.set(item.date, idx);
+      }
+    });
+    
+    console.log('比較銘柄の日付マップ作成完了:', compareSeriesDateMap.size, '件');
+    
     // メイン銘柄の最初の始値を取得（表示範囲内で）
     for(const idx of visibleIndices){
       if(idx != null && series[idx] && series[idx].open != null){
         mainFirstOpen = series[idx].open;
-        console.log('mainFirstOpen:', mainFirstOpen, 'at index:', idx);
-        break;
-      }
-    }
-    
-    // 比較銘柄の最初の始値を取得（表示範囲内で、かつ比較銘柄のデータ範囲内）
-    for(const idx of visibleIndices){
-      if(idx != null && idx < compareSeries.length && compareSeries[idx] && compareSeries[idx].open != null){
-        compareFirstOpen = compareSeries[idx].open;
-        console.log('compareFirstOpen:', compareFirstOpen, 'at index:', idx);
+        console.log('mainFirstOpen:', mainFirstOpen, 'at index:', idx, 'date:', series[idx].date);
+        
+        // 同じ日付の比較銘柄データを探す
+        const compareIdx = compareSeriesDateMap.get(series[idx].date);
+        if(compareIdx != null && compareSeries[compareIdx] && compareSeries[compareIdx].open != null){
+          compareFirstOpen = compareSeries[compareIdx].open;
+          console.log('compareFirstOpen:', compareFirstOpen, 'at date:', series[idx].date);
+        }
         break;
       }
     }
@@ -1127,10 +1135,16 @@ function drawMain(visibleCandles, visibleIndices){
         };
       });
       
+      // 日付ベースで比較銘柄をマッチング
       displayCompareSeries = visibleCandles.map((c, i) => {
         const idx = visibleIndices[i];
-        if(idx == null || idx >= compareSeries.length || !compareSeries[idx]) return null;
-        const original = compareSeries[idx];
+        if(idx == null || !series[idx]) return null;
+        
+        const mainDate = series[idx].date;
+        const compareIdx = compareSeriesDateMap.get(mainDate);
+        
+        if(compareIdx == null || !compareSeries[compareIdx]) return null;
+        const original = compareSeries[compareIdx];
         if(original.open == null) return null;
         
         return {
@@ -1142,6 +1156,11 @@ function drawMain(visibleCandles, visibleIndices){
           volume: original.volume
         };
       });
+      
+      console.log('displayCompareSeries 作成完了');
+      console.log('displayCompareSeries 件数:', displayCompareSeries.length);
+      console.log('displayCompareSeries null以外の件数:', displayCompareSeries.filter(d => d !== null).length);
+      console.log('displayCompareSeries サンプル:', displayCompareSeries.filter(d => d !== null).slice(0, 3));
       
       // メイン銘柄のmin/max
       displaySeries.forEach((c) => {
@@ -1899,17 +1918,21 @@ function setupEventListeners(){
 
   // 比較チェックボックス
   document.getElementById('compareCheck')?.addEventListener('change', async (e) => {
+    console.log('比較チェック変更:', e.target.checked);
     compareEnabled = e.target.checked;
     if(compareEnabled){
       await loadCompareSymbol();
     }
+    console.log('比較チェック後 drawChart呼び出し');
     drawChart();
   });
 
   // 比較銘柄選択
   document.getElementById('compareSymbolSelect')?.addEventListener('change', async (e) => {
+    console.log('比較銘柄選択変更:', e.target.value);
     if(compareEnabled){
       await loadCompareSymbol();
+      console.log('比較銘柄選択後 drawChart呼び出し');
       drawChart();
     }
   });
