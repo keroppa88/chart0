@@ -95,6 +95,7 @@
     <div class="param-group"><label>MACD S</label><input type="number" id="macdShort" value="12"></div>
     <div class="param-group"><label>MACD L</label><input type="number" id="macdLong" value="26"></div>
     <div class="param-group"><label>Sig</label><input type="number" id="macdSignal" value="9"></div>
+    <div class="param-group"><label>ATR%</label><input type="number" id="atrPeriod" value="20"></div>
   </div>
 
   <div class="legend">
@@ -182,6 +183,18 @@
         <canvas class="indicator-canvas" id="rsiChart"></canvas>
       </div>
     </div>
+
+    <div class="indicator-container" id="atrContainer">
+      <div class="indicator-controls">
+        <button class="btn-icon btn-move" onclick="moveIndicator('atr','up')">▲</button>
+        <button class="btn-icon btn-move" onclick="moveIndicator('atr','down')">▼</button>
+        <button class="btn-icon btn-toggle" onclick="toggleIndicator('atr')" id="atrCollapseBtn">−</button>
+        <button class="btn-icon btn-expand" onclick="toggleIndicator('atr')" id="atrExpandBtn" style="display:none;">+</button>
+      </div>
+      <div class="indicator-wrapper" id="atrWrapper">
+        <canvas class="indicator-canvas" id="atrChart"></canvas>
+      </div>
+    </div>
   </div>
 
   <div id="tooltip" class="tooltip"></div>
@@ -195,7 +208,7 @@
     </div>
     <div class="modal-body">
 - 平日18時台に自動更新。
-- 銘柄選択は左右矢印で高速切り替え、左右＝1ずつ、上下＝10ずつ。
+- 銘柄選択は左右矢印で高速切替、左右＝1ずつ、上下＝10ずつ。
 - ホイール拡大縮小、ドラッグ左右移動。
 - 爆速表示を実現！
 - テクニカル指標は表示・非表示・場所入れ替えが可能。数値変更で動的描写。
@@ -213,14 +226,13 @@
    State
 ========================= */
 let chartListItems = null;
-let symbolCache = new Map(); // code -> daily series data
-let dailySeries = []; // 日足データ（オリジナル）
-let series = []; // 表示用データ（日足/週足/月足）
-let timeframe = 'daily'; // 'daily', 'weekly', 'monthly'
+let symbolCache = new Map();
+let dailySeries = [];
+let series = [];
+let timeframe = 'daily';
 let displayCount = 100;
 let offsetX = 0;
 
-// 比較機能用
 let compareEnabled = false;
 let compareDailySeries = [];
 let compareSeries = [];
@@ -235,7 +247,8 @@ let params = {
   ma1: 20, ma2: 60,
   rsi: 14,
   stochK: 14, stochD: 3,
-  macdShort: 12, macdLong: 26, macdSignal: 9
+  macdShort: 12, macdLong: 26, macdSignal: 9,
+  atr: 20
 };
 
 let mainCanvas, mainCtx;
@@ -243,19 +256,21 @@ let volumeCanvas, volumeCtx;
 let macdCanvas, macdCtx;
 let stochCanvas, stochCtx;
 let rsiCanvas, rsiCtx;
+let atrCanvas, atrCtx;
 let tooltip;
 
-let collapsed = { volume: false, macd: false, stoch: false, rsi: false };
+let collapsed = { volume: false, macd: false, stoch: false, rsi: false, atr: false };
 
 let indicators = {
   ma1: [], ma2: [],
   rsi: [],
   stoch: { k: [], d: [] },
-  macd: { macd: [], signal: [], hist: [] }
+  macd: { macd: [], signal: [], hist: [] },
+  atr: []
 };
 
-let backBuffers = { main: null, volume: null, macd: null, stoch: null, rsi: null };
-function resetBackBuffers(){ backBuffers.main = backBuffers.volume = backBuffers.macd = backBuffers.stoch = backBuffers.rsi = null; }
+let backBuffers = { main: null, volume: null, macd: null, stoch: null, rsi: null, atr: null };
+function resetBackBuffers(){ backBuffers.main = backBuffers.volume = backBuffers.macd = backBuffers.stoch = backBuffers.rsi = backBuffers.atr = null; }
 function saveBackBuffers(){
   try{
     backBuffers.main = mainCtx.getImageData(0,0,mainCanvas.width, mainCanvas.height);
@@ -263,6 +278,7 @@ function saveBackBuffers(){
     backBuffers.macd = (!collapsed.macd) ? macdCtx.getImageData(0,0,macdCanvas.width, macdCanvas.height) : null;
     backBuffers.stoch = (!collapsed.stoch) ? stochCtx.getImageData(0,0,stochCanvas.width, stochCanvas.height) : null;
     backBuffers.rsi = (!collapsed.rsi) ? rsiCtx.getImageData(0,0,rsiCanvas.width, rsiCanvas.height) : null;
+    backBuffers.atr = (!collapsed.atr) ? atrCtx.getImageData(0,0,atrCanvas.width, atrCanvas.height) : null;
   }catch(e){}
 }
 function restoreBackBuffers(){
@@ -272,6 +288,7 @@ function restoreBackBuffers(){
     if(!collapsed.macd && backBuffers.macd) macdCtx.putImageData(backBuffers.macd,0,0);
     if(!collapsed.stoch && backBuffers.stoch) stochCtx.putImageData(backBuffers.stoch,0,0);
     if(!collapsed.rsi && backBuffers.rsi) rsiCtx.putImageData(backBuffers.rsi,0,0);
+    if(!collapsed.atr && backBuffers.atr) atrCtx.putImageData(backBuffers.atr,0,0);
   }catch(e){}
 }
 
@@ -280,7 +297,7 @@ let rightSpaceEnabled = false;
 let dateLineEnabled = false;
 
 /* =========================
-   Data Version (日次キャッシュ用)
+   Data Version
 ========================= */
 function yyyymmddJST(){
   const now = new Date();
@@ -317,7 +334,6 @@ function detectDelimiter(headerLine){
   return tabCount>=commaCount ? "\t" : ",";
 }
 
-// OHLCV形式CSV（Date,Open,High,Low,Close,Volume）をパース
 function parseOHLCVFormat(text){
   const lines = text.trim().split(/\r?\n/);
   if(lines.length < 2) return [];
@@ -325,7 +341,6 @@ function parseOHLCVFormat(text){
   const delim = detectDelimiter(lines[0]);
   const header = parseDelimitedLine(lines[0], delim).map(s=>s.replace(/\r/g,'').trim());
   
-  // ヘッダーから各列のインデックスを取得
   const idxDate = header.findIndex(h => /date/i.test(h));
   const idxOpen = header.findIndex(h => /open/i.test(h));
   const idxHigh = header.findIndex(h => /high/i.test(h));
@@ -362,7 +377,6 @@ function parseOHLCVFormat(text){
   return rows;
 }
 
-// chartlist.csv をパース（code,name形式、ヘッダーなし）
 function parseChartList(text){
   const raw = String(text||"").replace(/\uFEFF/g,'').trim();
   if(!raw) return [];
@@ -384,9 +398,6 @@ function parseChartList(text){
   return out;
 }
 
-/* =========================
-   週足・月足データ生成
-========================= */
 function convertToWeekly(dailyData){
   if(!dailyData || dailyData.length === 0) return [];
   
@@ -395,9 +406,8 @@ function convertToWeekly(dailyData){
   
   for(const day of dailyData){
     const dateObj = new Date(day.date);
-    const dayOfWeek = dateObj.getDay(); // 0=日曜, 1=月曜, ..., 5=金曜
+    const dayOfWeek = dateObj.getDay();
     
-    // 週の開始判定（月曜日または最初のデータ）
     if(!currentWeek || dayOfWeek === 1 || dayOfWeek < currentWeek.lastDayOfWeek){
       if(currentWeek){
         weekly.push(currentWeek.data);
@@ -414,7 +424,6 @@ function convertToWeekly(dailyData){
         lastDayOfWeek: dayOfWeek
       };
     }else{
-      // 週内のデータを集約
       currentWeek.data.high = Math.max(currentWeek.data.high, day.high);
       currentWeek.data.low = Math.min(currentWeek.data.low, day.low);
       currentWeek.data.close = day.close;
@@ -423,7 +432,6 @@ function convertToWeekly(dailyData){
     }
   }
   
-  // 最後の週を追加
   if(currentWeek){
     weekly.push(currentWeek.data);
   }
@@ -457,7 +465,6 @@ function convertToMonthly(dailyData){
         }
       };
     }else{
-      // 月内のデータを集約
       currentMonth.data.high = Math.max(currentMonth.data.high, day.high);
       currentMonth.data.low = Math.min(currentMonth.data.low, day.low);
       currentMonth.data.close = day.close;
@@ -465,7 +472,6 @@ function convertToMonthly(dailyData){
     }
   }
   
-  // 最後の月を追加
   if(currentMonth){
     monthly.push(currentMonth.data);
   }
@@ -473,9 +479,6 @@ function convertToMonthly(dailyData){
   return monthly;
 }
 
-/* =========================
-   CSV Loading
-========================= */
 async function loadSymbolCSV(code){
   if(symbolCache.has(code)) return symbolCache.get(code);
   
@@ -494,7 +497,6 @@ async function loadSymbolCSV(code){
   }
 }
 
-// 前後の銘柄を先読み（非同期）
 function preloadAdjacentSymbols(currentIndex){
   if(!chartListItems || chartListItems.length === 0) return;
   
@@ -508,9 +510,6 @@ function preloadAdjacentSymbols(currentIndex){
   });
 }
 
-/* =========================
-   UI Population
-========================= */
 function populateSymbolSelect(){
   const sel = document.getElementById('symbolSelect');
   const compareSel = document.getElementById('compareSymbolSelect');
@@ -537,7 +536,6 @@ function populateSymbolSelect(){
     opt.textContent = `${item.code} ${item.name}`;
     sel.appendChild(opt);
     
-    // 比較用プルダウンにも追加
     if(compareSel) {
       const compareOpt = document.createElement('option');
       compareOpt.value = item.code;
@@ -574,7 +572,6 @@ async function autoLoadChartList(){
     populateSymbolSelect();
     el.textContent = `読込完了: ${chartListItems.length}銘柄`;
     
-    // 初回銘柄を表示
     await applySymbol();
   }catch(e){
     console.error(e);
@@ -687,6 +684,46 @@ function calculateStochastic(data, kP, dP){
   return { k: kLine, d: dLine };
 }
 
+function calculateATR(data, period){
+  const result = new Array(data.length).fill(null);
+  if(data.length < 2) return result;
+
+  // TR%を計算
+  const trPercent = new Array(data.length).fill(null);
+  for(let i = 1; i < data.length; i++){
+    const curr = data[i];
+    const prev = data[i - 1];
+    
+    // TR = max(H-L, |H-PC|, |L-PC|)
+    const tr1 = curr.high - curr.low;
+    const tr2 = Math.abs(curr.high - prev.close);
+    const tr3 = Math.abs(curr.low - prev.close);
+    const tr = Math.max(tr1, tr2, tr3);
+    
+    // TR% = TR / 前日終値
+    if(prev.close !== 0){
+      trPercent[i] = (tr / prev.close) * 100;
+    }
+  }
+
+  // ATR% = TR%の移動平均
+  for(let i = period; i < data.length; i++){
+    let sum = 0;
+    let count = 0;
+    for(let j = 0; j < period; j++){
+      if(trPercent[i - j] != null){
+        sum += trPercent[i - j];
+        count++;
+      }
+    }
+    if(count > 0){
+      result[i] = sum / count;
+    }
+  }
+  
+  return result;
+}
+
 function recomputeIndicators(){
   if(!series || series.length === 0){
     indicators.ma1 = []; 
@@ -694,6 +731,7 @@ function recomputeIndicators(){
     indicators.rsi = [];
     indicators.stoch = { k: [], d: [] };
     indicators.macd = { macd: [], signal: [], hist: [] };
+    indicators.atr = [];
     return;
   }
   indicators.ma1 = calculateMA(series, params.ma1);
@@ -701,11 +739,9 @@ function recomputeIndicators(){
   indicators.rsi = calculateRSI(series, params.rsi);
   indicators.stoch = calculateStochastic(series, params.stochK, params.stochD);
   indicators.macd = calculateMACD(series, params.macdShort, params.macdLong, params.macdSignal);
+  indicators.atr = calculateATR(series, params.atr);
 }
 
-/* =========================
-   Statistics Calculation
-========================= */
 function calcStatsForVisibleWindow(){
   if(!series || series.length === 0){
     return { winRate: null, upAvg: null, downAvg: null, bullRate: null, totalReturn: null, bullAvg: null, bearAvg: null };
@@ -717,20 +753,14 @@ function calcStatsForVisibleWindow(){
     return { winRate: null, upAvg: null, downAvg: null, bullRate: null, totalReturn: null, bullAvg: null, bearAvg: null };
   }
 
-  // 陽線率: close > open
   let bullN = 0, bullDen = 0;
-  
-  // 陽線時平均・陰線時平均（始値→終値の変化率）
   let bullSum = 0, bullCnt = 0;
   let bearSum = 0, bearCnt = 0;
-
-  // 前日比（窓内比較）：勝率・上昇時平均・下落時平均
   let winN = 0, winDen = 0;
   let upSum = 0, upCnt = 0;
   let downSum = 0, downCnt = 0;
-
-  // 騰落率：表示範囲の最初の始値から最後の終値まで
   let firstOpen = null, lastClose = null;
+  
   for(let k = 0; k < idxs.length; k++){
     const i = idxs[k];
     const c = series[i];
@@ -743,7 +773,6 @@ function calcStatsForVisibleWindow(){
       lastClose = c.close;
     }
 
-    // bull rate: close > open
     if(c.open != null && c.close != null && c.open !== 0){
       bullDen++;
       const ocPct = ((c.close - c.open) / c.open) * 100;
@@ -758,7 +787,6 @@ function calcStatsForVisibleWindow(){
       }
     }
 
-    // prev-close compare within visible window (k>=1)
     if(k >= 1){
       const ip = idxs[k - 1];
       const p = series[ip];
@@ -792,9 +820,6 @@ function calcStatsForVisibleWindow(){
   return { winRate, upAvg, downAvg, bullRate, totalReturn, bullAvg, bearAvg };
 }
 
-/* =========================
-   View Management
-========================= */
 function clampView(){
   if(!series || series.length === 0){
     displayCount = Math.max(10, displayCount);
@@ -869,9 +894,6 @@ function updateViewInfo(){
   el.textContent = `${timeframeLabel} 表示本数: ${displayCount} / 表示範囲: ${startDate && endDate ? `${startDate} ~ ${endDate}` : '-'}`;
 }
 
-/* =========================
-   Symbol Application
-========================= */
 async function applySymbol(){
   const sel = document.getElementById('symbolSelect');
   const code = sel?.value;
@@ -881,10 +903,7 @@ async function applySymbol(){
   const selectedOption = sel?.selectedOptions?.[0];
   currentSymbolDisplay = selectedOption?.textContent || code;
   
-  // CSVを読み込み（日足データ）
   dailySeries = await loadSymbolCSV(code);
-  
-  // 時間軸に応じてseriesを設定
   updateTimeframeSeries();
   
   offsetX = 0;
@@ -902,7 +921,6 @@ async function applySymbol(){
   updateViewInfo();
   drawChart();
   
-  // 前後の銘柄を先読み
   preloadAdjacentSymbols(sel.selectedIndex);
 }
 
@@ -935,19 +953,8 @@ async function loadCompareSymbol(){
   compareSymbolName = selectedOption?.textContent || code;
   compareSymbolCode = code;
   
-  console.log('比較銘柄読み込み開始:', code);
-  
-  // CSVを読み込み（日足データ）
   compareDailySeries = await loadSymbolCSV(code);
-  
-  console.log('比較銘柄データ件数:', compareDailySeries.length);
-  console.log('比較銘柄データサンプル:', compareDailySeries[0]);
-  
-  // 時間軸に応じてseriesを設定
   updateTimeframeSeries();
-  
-  console.log('時間軸変換後のデータ件数:', compareSeries.length);
-  console.log('メイン銘柄データ件数:', series.length);
 }
 
 function switchTimeframe(newTimeframe){
@@ -956,7 +963,6 @@ function switchTimeframe(newTimeframe){
   timeframe = newTimeframe;
   updateTimeframeSeries();
   
-  // 表示位置をリセット
   offsetX = 0;
   
   recomputeIndicators();
@@ -964,16 +970,8 @@ function switchTimeframe(newTimeframe){
   drawChart();
 }
 
-/* =========================
-   Drawing
-========================= */
 function drawChart(){
   if(!mainCanvas) return;
-
-  console.log('=== drawChart called ===');
-  console.log('compareEnabled:', compareEnabled);
-  console.log('compareSymbolCode:', compareSymbolCode);
-  console.log('compareSeries.length:', compareSeries.length);
 
   if(!series || series.length === 0){
     resetBackBuffers();
@@ -991,6 +989,7 @@ function drawChart(){
   drawMacd(visibleIndices);
   drawStoch(visibleIndices);
   drawRsi(visibleIndices);
+  drawAtr(visibleIndices);
 
   saveBackBuffers();
 }
@@ -1004,29 +1003,22 @@ function drawMain(visibleCandles, visibleIndices){
 
   ctx.clearRect(0, 0, w, h);
 
-  // 銘柄名と統計情報を背景として表示
   if(currentSymbolDisplay){
     ctx.save();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     
     if(compareEnabled && compareSymbolCode){
-      // 比較モード：銘柄名のみ表示（比較銘柄は薄く）
       ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      
-      // メイン銘柄（濃く）
       ctx.fillStyle = '#acacac';
       ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
       
-      // 全角スペース
       const mainWidth = ctx.measureText(currentSymbolDisplay).width;
       const spaceWidth = ctx.measureText('　').width;
       
-      // 比較銘柄（薄く）
       ctx.fillStyle = 'rgba(172, 172, 172, 0.4)';
       ctx.fillText(compareSymbolName, pad.l + 5 + mainWidth + spaceWidth, pad.t + 5);
     }else{
-      // 通常モード：統計情報も表示
       const { winRate, upAvg, downAvg, bullRate, totalReturn, bullAvg, bearAvg } = calcStatsForVisibleWindow();
       
       const fmtPct = (v) => (v == null || Number.isNaN(v)) ? "-" : v.toFixed(1) + "%";
@@ -1038,22 +1030,18 @@ function drawMain(visibleCandles, visibleIndices){
 
       const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
       
-      // 1行目：銘柄名（大きいフォント、薄いグレー）
       ctx.fillStyle = '#acacac';
       ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
       
-      // 銘柄名の幅を測定して、その右に時間軸ラベルと騰落率を配置（同じ大きさのフォント）
       const nameWidth = ctx.measureText(currentSymbolDisplay).width;
       ctx.fillStyle = '#acacac';
       ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillText(`${timeframeLabel}騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
       
-      // 2行目：勝率と平均（小さいフォント、濃いグレー）
       const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
       ctx.fillText(line2, pad.l + 5, pad.t + 45);
       
-      // 3行目：陽線率と陽線時平均・陰線時平均
       const line3 = `陽線率${fmtPct(bullRate)}（陽線時平均${fmtAvg(bullAvg)}、陰線時平均${fmtAvg(bearAvg)}）`;
       ctx.fillText(line3, pad.l + 5, pad.t + 65);
     }
@@ -1063,21 +1051,13 @@ function drawMain(visibleCandles, visibleIndices){
 
   let minP = Infinity, maxP = -Infinity;
 
-  // 比較モードの場合、データを正規化
   let displaySeries = visibleCandles;
   let displayCompareSeries = [];
   
   if(compareEnabled && compareSymbolCode && compareSeries.length > 0){
-    // 正規化用の最初の始値を取得
     let mainFirstOpen = null;
     let compareFirstOpen = null;
     
-    console.log('比較処理開始');
-    console.log('visibleIndices:', visibleIndices.filter(i => i != null).slice(0, 5));
-    console.log('series.length:', series.length);
-    console.log('compareSeries.length:', compareSeries.length);
-    
-    // 比較銘柄の日付→インデックスマップを作成
     const compareSeriesDateMap = new Map();
     compareSeries.forEach((item, idx) => {
       if(item && item.date) {
@@ -1085,41 +1065,28 @@ function drawMain(visibleCandles, visibleIndices){
       }
     });
     
-    console.log('比較銘柄の日付マップ作成完了:', compareSeriesDateMap.size, '件');
-    
-    // メイン銘柄の最初の始値を取得（表示範囲内で）
     for(const idx of visibleIndices){
       if(idx != null && series[idx] && series[idx].open != null){
         mainFirstOpen = series[idx].open;
-        console.log('mainFirstOpen:', mainFirstOpen, 'at index:', idx, 'date:', series[idx].date);
         
-        // 同じ日付の比較銘柄データを探す
         const compareIdx = compareSeriesDateMap.get(series[idx].date);
         if(compareIdx != null && compareSeries[compareIdx] && compareSeries[compareIdx].open != null){
           compareFirstOpen = compareSeries[compareIdx].open;
-          console.log('compareFirstOpen:', compareFirstOpen, 'at date:', series[idx].date);
         }
         break;
       }
     }
     
-    // 比較銘柄のデータが表示範囲に存在しない場合、比較銘柄の最初のデータを使用
     if(!compareFirstOpen && compareSeries.length > 0){
-      console.log('表示範囲に比較データなし、最初のデータを使用');
       for(let i = 0; i < compareSeries.length; i++){
         if(compareSeries[i] && compareSeries[i].open != null){
           compareFirstOpen = compareSeries[i].open;
-          console.log('compareFirstOpen (fallback):', compareFirstOpen, 'at index:', i);
           break;
         }
       }
     }
     
-    console.log('最終 mainFirstOpen:', mainFirstOpen);
-    console.log('最終 compareFirstOpen:', compareFirstOpen);
-    
     if(mainFirstOpen && mainFirstOpen !== 0 && compareFirstOpen && compareFirstOpen !== 0){
-      // 正規化したデータを作成
       displaySeries = visibleCandles.map((c, i) => {
         const idx = visibleIndices[i];
         if(idx == null || !series[idx]) return c;
@@ -1136,7 +1103,6 @@ function drawMain(visibleCandles, visibleIndices){
         };
       });
       
-      // 日付ベースで比較銘柄をマッチング
       displayCompareSeries = visibleCandles.map((c, i) => {
         const idx = visibleIndices[i];
         if(idx == null || !series[idx]) return null;
@@ -1158,12 +1124,6 @@ function drawMain(visibleCandles, visibleIndices){
         };
       });
       
-      console.log('displayCompareSeries 作成完了');
-      console.log('displayCompareSeries 件数:', displayCompareSeries.length);
-      console.log('displayCompareSeries null以外の件数:', displayCompareSeries.filter(d => d !== null).length);
-      console.log('displayCompareSeries サンプル:', displayCompareSeries.filter(d => d !== null).slice(0, 3));
-      
-      // メイン銘柄のmin/max
       displaySeries.forEach((c) => {
         if(!c) return;
         if(c.high != null) maxP = Math.max(maxP, c.high);
@@ -1172,7 +1132,6 @@ function drawMain(visibleCandles, visibleIndices){
         if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
       });
       
-      // 比較銘柄のmin/max
       displayCompareSeries.forEach((c) => {
         if(!c) return;
         if(c.high != null) maxP = Math.max(maxP, c.high);
@@ -1182,7 +1141,6 @@ function drawMain(visibleCandles, visibleIndices){
       });
     }
   }else{
-    // 通常モード
     visibleIndices.forEach((sIdx, i) => {
       const c = visibleCandles[i];
 
@@ -1245,16 +1203,14 @@ function drawMain(visibleCandles, visibleIndices){
     seriesIndex: visibleIndices[i]
   }));
 
-  // 日付表示ロジック
-  const showMonthStart = displayCount >= 60; // 60本以上なら月初表示
-  const datePositions = []; // 日付を表示する位置を記録
-  const dateLabels = []; // 表示する日付テキスト
+  const showMonthStart = displayCount >= 60;
+  const datePositions = [];
+  const dateLabels = [];
   
   if(timeframe === 'monthly'){
-    // 月足の場合は常にYYYY-MM形式で表示
     const allMonthPositions = [];
     const allMonthLabels = [];
-    const allMonthNumbers = []; // 月番号を保持
+    const allMonthNumbers = [];
     
     visibleCandles.forEach((c, i) => {
       if(!c.date) return;
@@ -1262,11 +1218,10 @@ function drawMain(visibleCandles, visibleIndices){
       const yearMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
       allMonthPositions.push(i);
       allMonthLabels.push(yearMonth);
-      allMonthNumbers.push(dateObj.getMonth() + 1); // 1-12
+      allMonthNumbers.push(dateObj.getMonth() + 1);
     });
     
     if(allMonthPositions.length >= 50){
-      // 50個以上：1月と7月のみ表示
       allMonthPositions.forEach((pos, idx) => {
         const monthNum = allMonthNumbers[idx];
         if(monthNum === 1 || monthNum === 7){
@@ -1275,23 +1230,19 @@ function drawMain(visibleCandles, visibleIndices){
         }
       });
     }else if(allMonthPositions.length > 20){
-      // 21-49個：直近 + 2ヶ月ごと
       const lastIdx = allMonthPositions.length - 1;
       datePositions.push(allMonthPositions[lastIdx]);
       dateLabels.push(allMonthLabels[lastIdx]);
       
-      // そこから遡って2ヶ月ごとに表示
       for(let i = lastIdx - 2; i >= 0; i -= 2){
         datePositions.unshift(allMonthPositions[i]);
         dateLabels.unshift(allMonthLabels[i]);
       }
     }else{
-      // 20個以下：すべて表示
       datePositions.push(...allMonthPositions);
       dateLabels.push(...allMonthLabels);
     }
   }else if(showMonthStart){
-    // 月初（またはその月の最初の営業日）を表示
     let lastMonth = null;
     const allMonthPositions = [];
     const allMonthLabels = [];
@@ -1308,35 +1259,29 @@ function drawMain(visibleCandles, visibleIndices){
       }
     });
     
-    // 20本以上ある場合は2ヶ月ごとに間引く
     if(allMonthPositions.length >= 20){
-      // 直近（最後）の月は必ず表示
       const lastIdx = allMonthPositions.length - 1;
       datePositions.push(allMonthPositions[lastIdx]);
       dateLabels.push(allMonthLabels[lastIdx]);
       
-      // そこから遡って2ヶ月ごとに表示
       for(let i = lastIdx - 2; i >= 0; i -= 2){
         datePositions.unshift(allMonthPositions[i]);
         dateLabels.unshift(allMonthLabels[i]);
       }
     }else{
-      // 20本未満ならすべて表示
       datePositions.push(...allMonthPositions);
       dateLabels.push(...allMonthLabels);
     }
   }else{
-    // 等間隔表示（従来通り）
     const interval = Math.ceil(visibleCandles.length / 6);
     for(let i = 0; i < visibleCandles.length; i += interval){
       if(visibleCandles[i].date){
         datePositions.push(i);
-        dateLabels.push(visibleCandles[i].date); // YYYY-MM-DD形式
+        dateLabels.push(visibleCandles[i].date);
       }
     }
   }
   
-  // 日付ラインを描画（チェックONの場合）
   if(dateLineEnabled){
     ctx.save();
     ctx.strokeStyle = '#e0e0e0';
@@ -1353,18 +1298,15 @@ function drawMain(visibleCandles, visibleIndices){
     ctx.restore();
   }
   
-  // 日付テキストを描画
   ctx.fillStyle = '#999';
   ctx.textAlign = 'center';
   datePositions.forEach((pos, idx) => {
     ctx.fillText(dateLabels[idx], getX(pos), h - 5);
   });
 
-  // ローソク足描画
   const bodyW = (chartW / visibleCandles.length) * 0.6;
   ctx.lineWidth = 1;
 
-  // 比較銘柄のローソク足（薄く描画）
   if(compareEnabled && displayCompareSeries.length > 0){
     displayCompareSeries.forEach((c, i) => {
       if(!c || c.open == null || c.high == null || c.low == null || c.close == null) return;
@@ -1396,7 +1338,6 @@ function drawMain(visibleCandles, visibleIndices){
     });
   }
 
-  // メイン銘柄のローソク足（通常描画）
   displaySeries.forEach((c, i) => {
     if(c.open == null || c.high == null || c.low == null || c.close == null) return;
 
@@ -1445,7 +1386,6 @@ function drawMain(visibleCandles, visibleIndices){
     ctx.stroke();
   };
   
-  // 比較モード時はMAを非表示
   if(!compareEnabled || !compareSymbolCode){
     drawLine(indicators.ma1, '#ff9800');
     drawLine(indicators.ma2, '#2196f3');
@@ -1660,6 +1600,70 @@ function drawRsi(visibleIndices){
   ctx.fillText(`RSI(${params.rsi})`, 5, 10);
 }
 
+function drawAtr(visibleIndices){
+  if(collapsed.atr) return;
+  const ctx = atrCtx;
+  const w = atrCanvas.width, h = atrCanvas.height;
+  const pad = { t: 10, b: 10, l: 10, r: 60 };
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  ctx.clearRect(0, 0, w, h);
+
+  const data = indicators.atr;
+  let minV = Infinity, maxV = -Infinity;
+
+  visibleIndices.forEach(sIdx => {
+    if(sIdx == null) return;
+    const v = data[sIdx];
+    if(v != null){
+      minV = Math.min(minV, v);
+      maxV = Math.max(maxV, v);
+    }
+  });
+
+  if(minV === Infinity){ minV = 0; maxV = 5; }
+  const range = Math.max(0.0001, maxV - minV);
+  minV = Math.max(0, minV - range * 0.1);
+  maxV = maxV + range * 0.1;
+  const scaleY = chartH / (maxV - minV);
+
+  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
+  const getY = (v) => pad.t + chartH - (v - minV) * scaleY;
+
+  ctx.strokeStyle = '#eee';
+  ctx.lineWidth = 1;
+  for(let i = 0; i <= 5; i++){
+    const y = pad.t + (chartH * i / 5);
+    const val = maxV - (maxV - minV) * (i / 5);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(w - pad.r, y);
+    ctx.stroke();
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'left';
+    ctx.fillText(val.toFixed(2) + '%', w - pad.r + 5, y + 4);
+  }
+
+  ctx.strokeStyle = '#e91e63';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  let m = false;
+  visibleIndices.forEach((sIdx, i) => {
+    if(sIdx == null){ m = false; return; }
+    const v = data[sIdx];
+    if(v != null){
+      const x = getX(i), y = getY(v);
+      if(!m){ ctx.moveTo(x, y); m = true; }
+      else ctx.lineTo(x, y);
+    }else m = false;
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = '#666';
+  ctx.textAlign = 'left';
+  ctx.fillText(`ATR%(${params.atr})`, 5, 10);
+}
+
 function drawCrosshair(x){
   restoreBackBuffers();
   if(x < 0) return;
@@ -1679,6 +1683,7 @@ function drawCrosshair(x){
   if(!collapsed.macd) draw(macdCtx, macdCanvas.height);
   if(!collapsed.stoch) draw(stochCtx, stochCanvas.height);
   if(!collapsed.rsi) draw(rsiCtx, rsiCanvas.height);
+  if(!collapsed.atr) draw(atrCtx, atrCanvas.height);
 }
 
 function handleTooltip(e, canvas){
@@ -1712,6 +1717,7 @@ function handleTooltip(e, canvas){
   const rsi = indicators.rsi[sIdx];
   const stK = indicators.stoch.k[sIdx], stD = indicators.stoch.d[sIdx];
   const macd = indicators.macd.macd[sIdx], sig = indicators.macd.signal[sIdx];
+  const atr = indicators.atr[sIdx];
 
   const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
 
@@ -1723,7 +1729,8 @@ function handleTooltip(e, canvas){
   html += `<span style="color:#ff9800">MA${params.ma1}:${fmt(ma1)}</span> <span style="color:#2196f3">MA${params.ma2}:${fmt(ma2)}</span><br>`;
   html += `<span style="color:#9c27b0">RSI:${fmt(rsi)}</span><br>`;
   html += `<span style="color:#00bcd4">K:${fmt(stK)}</span> <span style="color:#ff5722">D:${fmt(stD)}</span><br>`;
-  html += `MACD:${fmt(macd)} Sig:${fmt(sig)}`;
+  html += `MACD:${fmt(macd)} Sig:${fmt(sig)}<br>`;
+  html += `<span style="color:#e91e63">ATR%:${fmt(atr)}</span>`;
 
   tooltip.innerHTML = html;
   tooltip.style.display = 'block';
@@ -1736,15 +1743,11 @@ function handleTooltip(e, canvas){
   drawCrosshair(p.x);
 }
 
-/* =========================
-   Interaction
-========================= */
 function onWheelZoom(e){
   e.preventDefault();
   if(!series || series.length === 0) return;
 
   const shrink = (e.deltaY < 0);
-
   displayCount += (shrink ? -1 : +1);
 
   clampView();
@@ -1841,12 +1844,10 @@ function resizeCanvas(){
   resize(macdCanvas); 
   resize(stochCanvas); 
   resize(rsiCanvas);
+  resize(atrCanvas);
   drawChart();
 }
 
-/* =========================
-   Event Setup
-========================= */
 function setupEventListeners(){
   const helpBtn = document.getElementById('helpBtn');
   const helpModal = document.getElementById('helpModal');
@@ -1911,34 +1912,26 @@ function setupEventListeners(){
     drawChart();
   });
 
-  // 日付ラインチェックボックス
   document.getElementById('dateLineCheck')?.addEventListener('change', (e) => {
     dateLineEnabled = e.target.checked;
     drawChart();
   });
 
-  // 比較チェックボックス
   document.getElementById('compareCheck')?.addEventListener('change', async (e) => {
-    console.log('比較チェック変更:', e.target.checked);
     compareEnabled = e.target.checked;
     if(compareEnabled){
       await loadCompareSymbol();
     }
-    console.log('比較チェック後 drawChart呼び出し');
     drawChart();
   });
 
-  // 比較銘柄選択
   document.getElementById('compareSymbolSelect')?.addEventListener('change', async (e) => {
-    console.log('比較銘柄選択変更:', e.target.value);
     if(compareEnabled){
       await loadCompareSymbol();
-      console.log('比較銘柄選択後 drawChart呼び出し');
       drawChart();
     }
   });
 
-  // 時間軸切替のチェックボックス
   const dailyCheck = document.getElementById('dailyCheck');
   const weeklyCheck = document.getElementById('weeklyCheck');
   const monthlyCheck = document.getElementById('monthlyCheck');
@@ -1949,7 +1942,7 @@ function setupEventListeners(){
       monthlyCheck.checked = false;
       switchTimeframe('daily');
     }else{
-      e.target.checked = true; // 最低1つは選択
+      e.target.checked = true;
     }
   });
 
@@ -1959,7 +1952,7 @@ function setupEventListeners(){
       monthlyCheck.checked = false;
       switchTimeframe('weekly');
     }else{
-      e.target.checked = true; // 最低1つは選択
+      e.target.checked = true;
     }
   });
 
@@ -1969,7 +1962,7 @@ function setupEventListeners(){
       weeklyCheck.checked = false;
       switchTimeframe('monthly');
     }else{
-      e.target.checked = true; // 最低1つは選択
+      e.target.checked = true;
     }
   });
 
@@ -1988,18 +1981,18 @@ function setupEventListeners(){
       if(id === 'macdShort') params.macdShort = val;
       if(id === 'macdLong') params.macdLong = val;
       if(id === 'macdSignal') params.macdSignal = val;
+      if(id === 'atrPeriod') params.atr = val;
 
       recomputeIndicators();
       drawChart();
     });
   });
 
-  const canvases = [mainCanvas, volumeCanvas, macdCanvas, stochCanvas, rsiCanvas];
+  const canvases = [mainCanvas, volumeCanvas, macdCanvas, stochCanvas, rsiCanvas, atrCanvas];
   canvases.forEach(cvs => {
     if(!cvs) return;
 
     cvs.addEventListener('wheel', onWheelZoom, { passive: false });
-
     cvs.addEventListener('mousedown', (e) => onMouseDown(e, cvs));
     cvs.addEventListener('mousemove', (e) => onMouseMove(e, cvs));
     cvs.addEventListener('mouseup', onMouseUp);
@@ -2009,9 +2002,6 @@ function setupEventListeners(){
   window.addEventListener('resize', resizeCanvas);
 }
 
-/* =========================
-   Init
-========================= */
 function init(){
   mainCanvas = document.getElementById('mainChart');
   mainCtx = mainCanvas.getContext('2d');
@@ -2028,6 +2018,9 @@ function init(){
   rsiCanvas = document.getElementById('rsiChart');
   rsiCtx = rsiCanvas.getContext('2d');
 
+  atrCanvas = document.getElementById('atrChart');
+  atrCtx = atrCanvas.getContext('2d');
+
   tooltip = document.getElementById('tooltip');
 
   setupEventListeners();
@@ -2039,4 +2032,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
