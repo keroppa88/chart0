@@ -934,11 +934,19 @@ async function loadCompareSymbol(){
   compareSymbolName = selectedOption?.textContent || code;
   compareSymbolCode = code;
   
+  console.log('比較銘柄読み込み開始:', code);
+  
   // CSVを読み込み（日足データ）
   compareDailySeries = await loadSymbolCSV(code);
   
+  console.log('比較銘柄データ件数:', compareDailySeries.length);
+  console.log('比較銘柄データサンプル:', compareDailySeries[0]);
+  
   // 時間軸に応じてseriesを設定
   updateTimeframeSeries();
+  
+  console.log('時間軸変換後のデータ件数:', compareSeries.length);
+  console.log('メイン銘柄データ件数:', series.length);
 }
 
 function switchTimeframe(newTimeframe){
