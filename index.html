@@ -969,6 +969,11 @@ function switchTimeframe(newTimeframe){
 function drawChart(){
   if(!mainCanvas) return;
 
+  console.log('=== drawChart called ===');
+  console.log('compareEnabled:', compareEnabled);
+  console.log('compareSymbolCode:', compareSymbolCode);
+  console.log('compareSeries.length:', compareSeries.length);
+
   if(!series || series.length === 0){
     resetBackBuffers();
     mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
@@ -1066,10 +1071,16 @@ function drawMain(visibleCandles, visibleIndices){
     let mainFirstOpen = null;
     let compareFirstOpen = null;
     
+    console.log('比較処理開始');
+    console.log('visibleIndices:', visibleIndices.filter(i => i != null).slice(0, 5));
+    console.log('series.length:', series.length);
+    console.log('compareSeries.length:', compareSeries.length);
+    
     // メイン銘柄の最初の始値を取得（表示範囲内で）
     for(const idx of visibleIndices){
       if(idx != null && series[idx] && series[idx].open != null){
         mainFirstOpen = series[idx].open;
+        console.log('mainFirstOpen:', mainFirstOpen, 'at index:', idx);
         break;
       }
     }
@@ -1078,19 +1089,25 @@ function drawMain(visibleCandles, visibleIndices){
     for(const idx of visibleIndices){
       if(idx != null && idx < compareSeries.length && compareSeries[idx] && compareSeries[idx].open != null){
         compareFirstOpen = compareSeries[idx].open;
+        console.log('compareFirstOpen:', compareFirstOpen, 'at index:', idx);
         break;
       }
     }
     
     // 比較銘柄のデータが表示範囲に存在しない場合、比較銘柄の最初のデータを使用
     if(!compareFirstOpen && compareSeries.length > 0){
+      console.log('表示範囲に比較データなし、最初のデータを使用');
       for(let i = 0; i < compareSeries.length; i++){
         if(compareSeries[i] && compareSeries[i].open != null){
           compareFirstOpen = compareSeries[i].open;
+          console.log('compareFirstOpen (fallback):', compareFirstOpen, 'at index:', i);
           break;
         }
       }
     }
+    
+    console.log('最終 mainFirstOpen:', mainFirstOpen);
+    console.log('最終 compareFirstOpen:', compareFirstOpen);
     
     if(mainFirstOpen && mainFirstOpen !== 0 && compareFirstOpen && compareFirstOpen !== 0){
       // 正規化したデータを作成
