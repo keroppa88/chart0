@@ -1066,6 +1066,7 @@ function drawMain(visibleCandles, visibleIndices){
     let mainFirstOpen = null;
     let compareFirstOpen = null;
     
+    // メイン銘柄の最初の始値を取得（表示範囲内で）
     for(const idx of visibleIndices){
       if(idx != null && series[idx] && series[idx].open != null){
         mainFirstOpen = series[idx].open;
@@ -1073,10 +1074,21 @@ function drawMain(visibleCandles, visibleIndices){
       }
     }
     
+    // 比較銘柄の最初の始値を取得（表示範囲内で、かつ比較銘柄のデータ範囲内）
     for(const idx of visibleIndices){
-      if(idx != null && compareSeries[idx] && compareSeries[idx].open != null){
+      if(idx != null && idx < compareSeries.length && compareSeries[idx] && compareSeries[idx].open != null){
         compareFirstOpen = compareSeries[idx].open;
         break;
+      }
+    }
+    
+    // 比較銘柄のデータが表示範囲に存在しない場合、比較銘柄の最初のデータを使用
+    if(!compareFirstOpen && compareSeries.length > 0){
+      for(let i = 0; i < compareSeries.length; i++){
+        if(compareSeries[i] && compareSeries[i].open != null){
+          compareFirstOpen = compareSeries[i].open;
+          break;
+        }
       }
     }
     
@@ -1100,7 +1112,7 @@ function drawMain(visibleCandles, visibleIndices){
       
       displayCompareSeries = visibleCandles.map((c, i) => {
         const idx = visibleIndices[i];
-        if(idx == null || !compareSeries[idx]) return null;
+        if(idx == null || idx >= compareSeries.length || !compareSeries[idx]) return null;
         const original = compareSeries[idx];
         if(original.open == null) return null;
         
