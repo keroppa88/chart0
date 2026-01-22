@@ -96,6 +96,7 @@
     <div class="param-group"><label>MACD L</label><input type="number" id="macdLong" value="26"></div>
     <div class="param-group"><label>Sig</label><input type="number" id="macdSignal" value="9"></div>
     <div class="param-group"><label>ATR%</label><input type="number" id="atrPeriod" value="20"></div>
+    <div class="param-group"><label>ADX</label><input type="number" id="adxPeriod" value="14"></div>
   </div>
 
   <div class="legend">
@@ -195,6 +196,18 @@
         <canvas class="indicator-canvas" id="atrChart"></canvas>
       </div>
     </div>
+
+    <div class="indicator-container" id="adxContainer">
+      <div class="indicator-controls">
+        <button class="btn-icon btn-move" onclick="moveIndicator('adx','up')">▲</button>
+        <button class="btn-icon btn-move" onclick="moveIndicator('adx','down')">▼</button>
+        <button class="btn-icon btn-toggle" onclick="toggleIndicator('adx')" id="adxCollapseBtn">−</button>
+        <button class="btn-icon btn-expand" onclick="toggleIndicator('adx')" id="adxExpandBtn" style="display:none;">+</button>
+      </div>
+      <div class="indicator-wrapper" id="adxWrapper">
+        <canvas class="indicator-canvas" id="adxChart"></canvas>
+      </div>
+    </div>
   </div>
 
   <div id="tooltip" class="tooltip"></div>
@@ -216,9 +229,6 @@
 - 表示範囲の勝率、陽線率などを表示する。
 - 任意の銘柄を比較対象にすることができる。表示範囲初日始値＝100。
 - 株価指数、業種別指数はETFで代替している。
-- 半導体株指数の2024/07以前分は実データから換算した値を補填。
-- ATR％は相場変動を測る。ATR%＝TR%の移動平均
-- TR%＝（max(当日高値-当日安値, |当日高値-前日終値|, |当日安値-前日終値|)）/前日終値
 - 公式JPXAPI→個別CSV→HTMLブラウザアプリで表示。    
     </div>
   </div>
@@ -251,7 +261,8 @@ let params = {
   rsi: 14,
   stochK: 14, stochD: 3,
   macdShort: 12, macdLong: 26, macdSignal: 9,
-  atr: 20
+  atr: 20,
+  adx: 14
 };
 
 let mainCanvas, mainCtx;
@@ -260,20 +271,22 @@ let macdCanvas, macdCtx;
 let stochCanvas, stochCtx;
 let rsiCanvas, rsiCtx;
 let atrCanvas, atrCtx;
+let adxCanvas, adxCtx;
 let tooltip;
 
-let collapsed = { volume: false, macd: false, stoch: false, rsi: false, atr: false };
+let collapsed = { volume: false, macd: false, stoch: false, rsi: false, atr: false, adx: false };
 
 let indicators = {
   ma1: [], ma2: [],
   rsi: [],
   stoch: { k: [], d: [] },
   macd: { macd: [], signal: [], hist: [] },
-  atr: []
+  atr: [],
+  adx: { adx: [], plusDI: [], minusDI: [] }
 };
 
-let backBuffers = { main: null, volume: null, macd: null, stoch: null, rsi: null, atr: null };
-function resetBackBuffers(){ backBuffers.main = backBuffers.volume = backBuffers.macd = backBuffers.stoch = backBuffers.rsi = backBuffers.atr = null; }
+let backBuffers = { main: null, volume: null, macd: null, stoch: null, rsi: null, atr: null, adx: null };
+function resetBackBuffers(){ backBuffers.main = backBuffers.volume = backBuffers.macd = backBuffers.stoch = backBuffers.rsi = backBuffers.atr = backBuffers.adx = null; }
 function saveBackBuffers(){
   try{
     backBuffers.main = mainCtx.getImageData(0,0,mainCanvas.width, mainCanvas.height);
@@ -282,6 +295,7 @@ function saveBackBuffers(){
     backBuffers.stoch = (!collapsed.stoch) ? stochCtx.getImageData(0,0,stochCanvas.width, stochCanvas.height) : null;
     backBuffers.rsi = (!collapsed.rsi) ? rsiCtx.getImageData(0,0,rsiCanvas.width, rsiCanvas.height) : null;
     backBuffers.atr = (!collapsed.atr) ? atrCtx.getImageData(0,0,atrCanvas.width, atrCanvas.height) : null;
+    backBuffers.adx = (!collapsed.adx) ? adxCtx.getImageData(0,0,adxCanvas.width, adxCanvas.height) : null;
   }catch(e){}
 }
 function restoreBackBuffers(){
@@ -292,6 +306,7 @@ function restoreBackBuffers(){
     if(!collapsed.stoch && backBuffers.stoch) stochCtx.putImageData(backBuffers.stoch,0,0);
     if(!collapsed.rsi && backBuffers.rsi) rsiCtx.putImageData(backBuffers.rsi,0,0);
     if(!collapsed.atr && backBuffers.atr) atrCtx.putImageData(backBuffers.atr,0,0);
+    if(!collapsed.adx && backBuffers.adx) adxCtx.putImageData(backBuffers.adx,0,0);
   }catch(e){}
 }
 
@@ -727,6 +742,108 @@ function calculateATR(data, period){
   return result;
 }
 
+function calculateADX(data, period){
+  const adxLine = new Array(data.length).fill(null);
+  const plusDI = new Array(data.length).fill(null);
+  const minusDI = new Array(data.length).fill(null);
+  
+  if(data.length < period + 1) return { adx: adxLine, plusDI, minusDI };
+
+  // ① TR, +DM, -DM を計算
+  const tr = new Array(data.length).fill(0);
+  const plusDM = new Array(data.length).fill(0);
+  const minusDM = new Array(data.length).fill(0);
+
+  for(let i = 1; i < data.length; i++){
+    const curr = data[i];
+    const prev = data[i - 1];
+    
+    // TR = max(H-L, |H-PC|, |L-PC|)
+    const tr1 = curr.high - curr.low;
+    const tr2 = Math.abs(curr.high - prev.close);
+    const tr3 = Math.abs(curr.low - prev.close);
+    tr[i] = Math.max(tr1, tr2, tr3);
+    
+    // +DM, -DM
+    const upMove = curr.high - prev.high;
+    const downMove = prev.low - curr.low;
+    
+    if(upMove > downMove && upMove > 0){
+      plusDM[i] = upMove;
+    }
+    if(downMove > upMove && downMove > 0){
+      minusDM[i] = downMove;
+    }
+  }
+
+  // ③ Wilder方式で平滑化
+  const smoothTR = new Array(data.length).fill(null);
+  const smoothPlusDM = new Array(data.length).fill(null);
+  const smoothMinusDM = new Array(data.length).fill(null);
+
+  // 最初のn期間は単純合計
+  let sumTR = 0, sumPlusDM = 0, sumMinusDM = 0;
+  for(let i = 1; i <= period; i++){
+    sumTR += tr[i];
+    sumPlusDM += plusDM[i];
+    sumMinusDM += minusDM[i];
+  }
+  
+  smoothTR[period] = sumTR;
+  smoothPlusDM[period] = sumPlusDM;
+  smoothMinusDM[period] = sumMinusDM;
+
+  // period+1以降はWilder方式で平滑化
+  for(let i = period + 1; i < data.length; i++){
+    smoothTR[i] = smoothTR[i - 1] - (smoothTR[i - 1] / period) + tr[i];
+    smoothPlusDM[i] = smoothPlusDM[i - 1] - (smoothPlusDM[i - 1] / period) + plusDM[i];
+    smoothMinusDM[i] = smoothMinusDM[i - 1] - (smoothMinusDM[i - 1] / period) + minusDM[i];
+  }
+
+  // ④ +DI, -DI を計算
+  for(let i = period; i < data.length; i++){
+    if(smoothTR[i] !== 0){
+      plusDI[i] = 100 * (smoothPlusDM[i] / smoothTR[i]);
+      minusDI[i] = 100 * (smoothMinusDM[i] / smoothTR[i]);
+    }
+  }
+
+  // ⑤ DX を計算
+  const dx = new Array(data.length).fill(null);
+  for(let i = period; i < data.length; i++){
+    if(plusDI[i] != null && minusDI[i] != null){
+      const sum = plusDI[i] + minusDI[i];
+      if(sum !== 0){
+        dx[i] = 100 * Math.abs(plusDI[i] - minusDI[i]) / sum;
+      }
+    }
+  }
+
+  // ⑥ ADX = DXをWilder方式で平滑化
+  // 最初のn期間のDXの平均
+  let sumDX = 0;
+  let countDX = 0;
+  for(let i = period; i < period * 2 && i < data.length; i++){
+    if(dx[i] != null){
+      sumDX += dx[i];
+      countDX++;
+    }
+  }
+  
+  if(countDX > 0){
+    adxLine[period * 2 - 1] = sumDX / countDX;
+  }
+
+  // それ以降はWilder方式で平滑化
+  for(let i = period * 2; i < data.length; i++){
+    if(adxLine[i - 1] != null && dx[i] != null){
+      adxLine[i] = (adxLine[i - 1] * (period - 1) + dx[i]) / period;
+    }
+  }
+
+  return { adx: adxLine, plusDI, minusDI };
+}
+
 function recomputeIndicators(){
   if(!series || series.length === 0){
     indicators.ma1 = []; 
@@ -735,6 +852,7 @@ function recomputeIndicators(){
     indicators.stoch = { k: [], d: [] };
     indicators.macd = { macd: [], signal: [], hist: [] };
     indicators.atr = [];
+    indicators.adx = { adx: [], plusDI: [], minusDI: [] };
     return;
   }
   indicators.ma1 = calculateMA(series, params.ma1);
@@ -743,6 +861,7 @@ function recomputeIndicators(){
   indicators.stoch = calculateStochastic(series, params.stochK, params.stochD);
   indicators.macd = calculateMACD(series, params.macdShort, params.macdLong, params.macdSignal);
   indicators.atr = calculateATR(series, params.atr);
+  indicators.adx = calculateADX(series, params.adx);
 }
 
 function calcStatsForVisibleWindow(){
@@ -993,6 +1112,7 @@ function drawChart(){
   drawStoch(visibleIndices);
   drawRsi(visibleIndices);
   drawAtr(visibleIndices);
+  drawAdx(visibleIndices);
 
   saveBackBuffers();
 }
@@ -1667,6 +1787,99 @@ function drawAtr(visibleIndices){
   ctx.fillText(`ATR%(${params.atr})`, 5, 10);
 }
 
+function drawAdx(visibleIndices){
+  if(collapsed.adx) return;
+  const ctx = adxCtx;
+  const w = adxCanvas.width, h = adxCanvas.height;
+  const pad = { t: 10, b: 10, l: 10, r: 60 };
+  const chartW = w - pad.l - pad.r;
+  const chartH = h - pad.t - pad.b;
+  ctx.clearRect(0, 0, w, h);
+
+  const data = indicators.adx;
+  let minV = Infinity, maxV = -Infinity;
+
+  visibleIndices.forEach(sIdx => {
+    if(sIdx == null) return;
+    const adx = data.adx[sIdx];
+    const pdi = data.plusDI[sIdx];
+    const mdi = data.minusDI[sIdx];
+    if(adx != null){ minV = Math.min(minV, adx); maxV = Math.max(maxV, adx); }
+    if(pdi != null){ minV = Math.min(minV, pdi); maxV = Math.max(maxV, pdi); }
+    if(mdi != null){ minV = Math.min(minV, mdi); maxV = Math.max(maxV, mdi); }
+  });
+
+  if(minV === Infinity){ minV = 0; maxV = 100; }
+  const range = Math.max(0.0001, maxV - minV);
+  minV = Math.max(0, minV - range * 0.1);
+  maxV = Math.min(100, maxV + range * 0.1);
+  const scaleY = chartH / (maxV - minV);
+
+  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
+  const getY = (v) => pad.t + chartH - (v - minV) * scaleY;
+
+  // グリッド線
+  ctx.strokeStyle = '#eee';
+  ctx.lineWidth = 1;
+  for(let i = 0; i <= 5; i++){
+    const y = pad.t + (chartH * i / 5);
+    const val = maxV - (maxV - minV) * (i / 5);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(w - pad.r, y);
+    ctx.stroke();
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'left';
+    ctx.fillText(val.toFixed(1), w - pad.r + 5, y + 4);
+  }
+
+  // 25の参照線（ADXの重要ライン）
+  if(minV <= 25 && maxV >= 25){
+    const y25 = getY(25);
+    ctx.strokeStyle = '#ccc';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y25);
+    ctx.lineTo(w - pad.r, y25);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const drawLine = (arr, color) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    let m = false;
+    visibleIndices.forEach((sIdx, i) => {
+      if(sIdx == null){ m = false; return; }
+      const v = arr[sIdx];
+      if(v != null){
+        const x = getX(i), y = getY(v);
+        if(!m){ ctx.moveTo(x, y); m = true; }
+        else ctx.lineTo(x, y);
+      }else m = false;
+    });
+    ctx.stroke();
+  };
+
+  // +DI (緑), -DI (赤), ADX (青)
+  drawLine(data.plusDI, '#4caf50');
+  drawLine(data.minusDI, '#f44336');
+  drawLine(data.adx, '#2196f3');
+
+  ctx.fillStyle = '#666';
+  ctx.textAlign = 'left';
+  ctx.fillText(`ADX(${params.adx})`, 5, 10);
+  
+  // 凡例
+  ctx.fillStyle = '#4caf50';
+  ctx.fillText('+DI', 80, 10);
+  ctx.fillStyle = '#f44336';
+  ctx.fillText('-DI', 120, 10);
+  ctx.fillStyle = '#2196f3';
+  ctx.fillText('ADX', 160, 10);
+}
+
 function drawCrosshair(x){
   restoreBackBuffers();
   if(x < 0) return;
@@ -1687,6 +1900,7 @@ function drawCrosshair(x){
   if(!collapsed.stoch) draw(stochCtx, stochCanvas.height);
   if(!collapsed.rsi) draw(rsiCtx, rsiCanvas.height);
   if(!collapsed.atr) draw(atrCtx, atrCanvas.height);
+  if(!collapsed.adx) draw(adxCtx, adxCanvas.height);
 }
 
 function handleTooltip(e, canvas){
@@ -1721,6 +1935,9 @@ function handleTooltip(e, canvas){
   const stK = indicators.stoch.k[sIdx], stD = indicators.stoch.d[sIdx];
   const macd = indicators.macd.macd[sIdx], sig = indicators.macd.signal[sIdx];
   const atr = indicators.atr[sIdx];
+  const adx = indicators.adx.adx[sIdx];
+  const plusDI = indicators.adx.plusDI[sIdx];
+  const minusDI = indicators.adx.minusDI[sIdx];
 
   const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
 
@@ -1733,7 +1950,8 @@ function handleTooltip(e, canvas){
   html += `<span style="color:#9c27b0">RSI:${fmt(rsi)}</span><br>`;
   html += `<span style="color:#00bcd4">K:${fmt(stK)}</span> <span style="color:#ff5722">D:${fmt(stD)}</span><br>`;
   html += `MACD:${fmt(macd)} Sig:${fmt(sig)}<br>`;
-  html += `<span style="color:#e91e63">ATR%:${fmt(atr)}</span>`;
+  html += `<span style="color:#e91e63">ATR%:${fmt(atr)}</span><br>`;
+  html += `<span style="color:#2196f3">ADX:${fmt(adx)}</span> <span style="color:#4caf50">+DI:${fmt(plusDI)}</span> <span style="color:#f44336">-DI:${fmt(minusDI)}</span>`;
 
   tooltip.innerHTML = html;
   tooltip.style.display = 'block';
@@ -1848,6 +2066,7 @@ function resizeCanvas(){
   resize(stochCanvas); 
   resize(rsiCanvas);
   resize(atrCanvas);
+  resize(adxCanvas);
   drawChart();
 }
 
@@ -1985,13 +2204,14 @@ function setupEventListeners(){
       if(id === 'macdLong') params.macdLong = val;
       if(id === 'macdSignal') params.macdSignal = val;
       if(id === 'atrPeriod') params.atr = val;
+      if(id === 'adxPeriod') params.adx = val;
 
       recomputeIndicators();
       drawChart();
     });
   });
 
-  const canvases = [mainCanvas, volumeCanvas, macdCanvas, stochCanvas, rsiCanvas, atrCanvas];
+  const canvases = [mainCanvas, volumeCanvas, macdCanvas, stochCanvas, rsiCanvas, atrCanvas, adxCanvas];
   canvases.forEach(cvs => {
     if(!cvs) return;
 
@@ -2024,6 +2244,9 @@ function init(){
   atrCanvas = document.getElementById('atrChart');
   atrCtx = atrCanvas.getContext('2d');
 
+  adxCanvas = document.getElementById('adxChart');
+  adxCtx = adxCanvas.getContext('2d');
+
   tooltip = document.getElementById('tooltip');
 
   setupEventListeners();
@@ -2035,4 +2258,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
