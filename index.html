@@ -1845,9 +1845,9 @@ function drawAdx(visibleIndices){
     ctx.setLineDash([]);
   }
 
-  const drawLine = (arr, color) => {
+  const drawLine = (arr, color, lineWidth = 1.5) => {
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
     let m = false;
     visibleIndices.forEach((sIdx, i) => {
@@ -1862,10 +1862,10 @@ function drawAdx(visibleIndices){
     ctx.stroke();
   };
 
-  // +DI (緑), -DI (赤), ADX (青)
-  drawLine(data.plusDI, '#4caf50');
-  drawLine(data.minusDI, '#f44336');
-  drawLine(data.adx, '#2196f3');
+  // +DI (緑), -DI (青), ADX (赤・太い)
+  drawLine(data.plusDI, '#4caf50', 2);
+  drawLine(data.minusDI, '#2196f3', 2);
+  drawLine(data.adx, '#f44336', 2.5);
 
   ctx.fillStyle = '#666';
   ctx.textAlign = 'left';
@@ -1874,9 +1874,9 @@ function drawAdx(visibleIndices){
   // 凡例
   ctx.fillStyle = '#4caf50';
   ctx.fillText('+DI', 80, 10);
-  ctx.fillStyle = '#f44336';
-  ctx.fillText('-DI', 120, 10);
   ctx.fillStyle = '#2196f3';
+  ctx.fillText('-DI', 120, 10);
+  ctx.fillStyle = '#f44336';
   ctx.fillText('ADX', 160, 10);
 }
 
@@ -1951,7 +1951,7 @@ function handleTooltip(e, canvas){
   html += `<span style="color:#00bcd4">K:${fmt(stK)}</span> <span style="color:#ff5722">D:${fmt(stD)}</span><br>`;
   html += `MACD:${fmt(macd)} Sig:${fmt(sig)}<br>`;
   html += `<span style="color:#e91e63">ATR%:${fmt(atr)}</span><br>`;
-  html += `<span style="color:#2196f3">ADX:${fmt(adx)}</span> <span style="color:#4caf50">+DI:${fmt(plusDI)}</span> <span style="color:#f44336">-DI:${fmt(minusDI)}</span>`;
+  html += `<span style="color:#f44336">ADX:${fmt(adx)}</span> <span style="color:#4caf50">+DI:${fmt(plusDI)}</span> <span style="color:#2196f3">-DI:${fmt(minusDI)}</span>`;
 
   tooltip.innerHTML = html;
   tooltip.style.display = 'block';
