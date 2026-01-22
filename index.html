@@ -59,7 +59,14 @@
 
   <div class="controls-row" style="margin-top:15px;">
     <div class="param-group">
-      <label>銘柄</label>
+      <label>全銘柄</label>
+      <select id="allSymbolSelect">
+        <option value="">選択してください</option>
+      </select>
+    </div>
+
+    <div class="param-group">
+      <label>225銘柄</label>
       <select id="symbolSelect">
         <option value="">読み込み中...</option>
       </select>
@@ -239,6 +246,7 @@
    State
 ========================= */
 let chartListItems = null;
+let allChartListItems = null;
 let symbolCache = new Map();
 let dailySeries = [];
 let series = [];
@@ -515,12 +523,12 @@ async function loadSymbolCSV(code){
   }
 }
 
-function preloadAdjacentSymbols(currentIndex){
-  if(!chartListItems || chartListItems.length === 0) return;
+function preloadAdjacentSymbols(currentIndex, listItems){
+  if(!listItems || listItems.length === 0) return;
   
   const codes = [
-    chartListItems[currentIndex - 1]?.code,
-    chartListItems[currentIndex + 1]?.code
+    listItems[currentIndex - 1]?.code,
+    listItems[currentIndex + 1]?.code
   ].filter(c => c && !symbolCache.has(c));
   
   codes.forEach(code => {
@@ -529,47 +537,78 @@ function preloadAdjacentSymbols(currentIndex){
 }
 
 function populateSymbolSelect(){
-  const sel = document.getElementById('symbolSelect');
+  const sel225 = document.getElementById('symbolSelect');
+  const selAll = document.getElementById('allSymbolSelect');
   const compareSel = document.getElementById('compareSymbolSelect');
-  if(!sel) return;
+  if(!sel225) return;
   
-  const current = sel.value;
+  const current225 = sel225.value;
+  const currentAll = selAll?.value || "";
   const currentCompare = compareSel?.value || "";
-  sel.innerHTML = "";
-  if(compareSel) {
-    compareSel.innerHTML = '<option value="">選択してください</option>';
-  }
   
+  // 225銘柄プルダウン
+  sel225.innerHTML = "";
   if(!Array.isArray(chartListItems) || chartListItems.length === 0){
     const opt = document.createElement('option');
     opt.value = "";
     opt.textContent = "銘柄リストが空です";
-    sel.appendChild(opt);
-    return;
-  }
-  
-  for(const item of chartListItems){
-    const opt = document.createElement('option');
-    opt.value = item.code;
-    opt.textContent = `${item.code} ${item.name}`;
-    sel.appendChild(opt);
+    sel225.appendChild(opt);
+  } else {
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = "";
+    defaultOpt.textContent = "選択してください";
+    sel225.appendChild(defaultOpt);
     
-    if(compareSel) {
-      const compareOpt = document.createElement('option');
-      compareOpt.value = item.code;
-      compareOpt.textContent = `${item.code} ${item.name}`;
-      compareSel.appendChild(compareOpt);
+    for(const item of chartListItems){
+      const opt = document.createElement('option');
+      opt.value = item.code;
+      opt.textContent = `${item.code} ${item.name}`;
+      sel225.appendChild(opt);
+    }
+    
+    if(current225 && chartListItems.some(item => item.code === current225)){
+      sel225.value = current225;
     }
   }
   
-  if(current && chartListItems.some(item => item.code === current)){
-    sel.value = current;
-  }else{
-    sel.selectedIndex = 0;
+  // 全銘柄プルダウン
+  if(selAll) {
+    selAll.innerHTML = "";
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = "";
+    defaultOpt.textContent = "選択してください";
+    selAll.appendChild(defaultOpt);
+    
+    if(Array.isArray(allChartListItems) && allChartListItems.length > 0){
+      for(const item of allChartListItems){
+        const opt = document.createElement('option');
+        opt.value = item.code;
+        opt.textContent = `${item.code} ${item.name}`;
+        selAll.appendChild(opt);
+      }
+      
+      if(currentAll && allChartListItems.some(item => item.code === currentAll)){
+        selAll.value = currentAll;
+      }
+    }
   }
   
-  if(currentCompare && chartListItems.some(item => item.code === currentCompare)){
-    compareSel.value = currentCompare;
+  // 比較用プルダウン（全銘柄を使用）
+  if(compareSel) {
+    compareSel.innerHTML = '<option value="">選択してください</option>';
+    
+    if(Array.isArray(allChartListItems) && allChartListItems.length > 0){
+      for(const item of allChartListItems){
+        const compareOpt = document.createElement('option');
+        compareOpt.value = item.code;
+        compareOpt.textContent = `${item.code} ${item.name}`;
+        compareSel.appendChild(compareOpt);
+      }
+      
+      if(currentCompare && allChartListItems.some(item => item.code === currentCompare)){
+        compareSel.value = currentCompare;
+      }
+    }
   }
 }
 
@@ -577,20 +616,47 @@ async function autoLoadChartList(){
   const el = document.getElementById('autoStatus');
   try{
     el.textContent = "chartlist.csv を読み込み中...";
-    const res = await fetch('./chartlist.csv');
-    if(!res.ok) throw new Error(`fetch失敗: ${res.status} ${res.statusText}`);
     
-    const text = await res.text();
-    chartListItems = parseChartList(text);
+    // chartlist.csv (225銘柄) を読み込み
+    const res225 = await fetch('./chartlist.csv');
+    if(!res225.ok) throw new Error(`chartlist.csv fetch失敗: ${res225.status} ${res225.statusText}`);
+    
+    const text225 = await res225.text();
+    chartListItems = parseChartList(text225);
     
     if(!Array.isArray(chartListItems) || chartListItems.length === 0){
       throw new Error("chartlist.csv が空または形式が不正です");
     }
     
-    populateSymbolSelect();
-    el.textContent = `読込完了: ${chartListItems.length}銘柄`;
+    el.textContent = `225銘柄読込完了: ${chartListItems.length}銘柄`;
     
-    await applySymbol();
+    // allchartlist.csv (全銘柄) を読み込み
+    try {
+      const resAll = await fetch('./allchartlist.csv');
+      if(resAll.ok) {
+        const textAll = await resAll.text();
+        allChartListItems = parseChartList(textAll);
+        
+        if(Array.isArray(allChartListItems) && allChartListItems.length > 0){
+          el.textContent = `読込完了: 225銘柄=${chartListItems.length}, 全銘柄=${allChartListItems.length}`;
+        }
+      } else {
+        console.warn('allchartlist.csv が見つかりません。225銘柄のみ使用します。');
+        allChartListItems = [...chartListItems]; // 225銘柄をコピー
+      }
+    } catch(e) {
+      console.warn('allchartlist.csv の読み込みエラー。225銘柄のみ使用します:', e);
+      allChartListItems = [...chartListItems]; // 225銘柄をコピー
+    }
+    
+    populateSymbolSelect();
+    
+    // 初回は225銘柄の最初の銘柄を表示
+    const sel225 = document.getElementById('symbolSelect');
+    if(sel225 && sel225.options.length > 1) {
+      sel225.selectedIndex = 1; // 0は「選択してください」なので1を選択
+      await applySymbol();
+    }
   }catch(e){
     console.error(e);
     el.textContent = `エラー: ${e.message}`;
@@ -1017,12 +1083,27 @@ function updateViewInfo(){
 }
 
 async function applySymbol(){
-  const sel = document.getElementById('symbolSelect');
-  const code = sel?.value;
+  const sel225 = document.getElementById('symbolSelect');
+  const selAll = document.getElementById('allSymbolSelect');
+  
+  // どちらのプルダウンが選択されているか判定
+  let code = null;
+  let selectedOption = null;
+  
+  if(sel225?.value) {
+    code = sel225.value;
+    selectedOption = sel225.selectedOptions?.[0];
+    // 全銘柄プルダウンをクリア
+    if(selAll) selAll.value = "";
+  } else if(selAll?.value) {
+    code = selAll.value;
+    selectedOption = selAll.selectedOptions?.[0];
+    // 225銘柄プルダウンをクリア
+    if(sel225) sel225.value = "";
+  }
   
   if(!code) return;
   
-  const selectedOption = sel?.selectedOptions?.[0];
   currentSymbolDisplay = selectedOption?.textContent || code;
   
   dailySeries = await loadSymbolCSV(code);
@@ -1043,7 +1124,12 @@ async function applySymbol(){
   updateViewInfo();
   drawChart();
   
-  preloadAdjacentSymbols(sel.selectedIndex);
+  // 前後の銘柄を先読み（現在選択中のリストから）
+  if(sel225?.value && chartListItems) {
+    preloadAdjacentSymbols(sel225.selectedIndex, chartListItems);
+  } else if(selAll?.value && allChartListItems) {
+    preloadAdjacentSymbols(selAll.selectedIndex, allChartListItems);
+  }
 }
 
 function updateTimeframeSeries(){
@@ -2091,9 +2177,39 @@ function setupEventListeners(){
     if(e.key === 'Escape' && helpModal.style.display === 'flex') closeHelp(); 
   });
 
+  // 225銘柄プルダウンのイベント
   document.getElementById('symbolSelect')?.addEventListener('change', () => applySymbol());
 
   document.getElementById('symbolSelect')?.addEventListener('keydown', (e) => {
+    const sel = e.target;
+    const currentIndex = sel.selectedIndex;
+    const maxIndex = sel.options.length - 1;
+    let newIndex = currentIndex;
+
+    if(e.key === 'ArrowRight'){
+      e.preventDefault();
+      newIndex = Math.min(currentIndex + 1, maxIndex);
+    }else if(e.key === 'ArrowLeft'){
+      e.preventDefault();
+      newIndex = Math.max(currentIndex - 1, 0);
+    }else if(e.key === 'ArrowDown'){
+      e.preventDefault();
+      newIndex = Math.min(currentIndex + 10, maxIndex);
+    }else if(e.key === 'ArrowUp'){
+      e.preventDefault();
+      newIndex = Math.max(currentIndex - 10, 0);
+    }
+
+    if(newIndex !== currentIndex){
+      sel.selectedIndex = newIndex;
+      applySymbol();
+    }
+  });
+
+  // 全銘柄プルダウンのイベント
+  document.getElementById('allSymbolSelect')?.addEventListener('change', () => applySymbol());
+
+  document.getElementById('allSymbolSelect')?.addEventListener('keydown', (e) => {
     const sel = e.target;
     const currentIndex = sel.selectedIndex;
     const maxIndex = sel.options.length - 1;
