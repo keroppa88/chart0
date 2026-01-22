@@ -32,9 +32,9 @@
 
     .hint { font-size:12px; color:#666; }
     .view-info { font-size:13.2px; color:#444; font-weight:500; }
-    .legend { display:flex; gap:15px; font-size:12px; margin-bottom:10px; flex-wrap:wrap;}
+    .legend { display:flex; gap:15px; font-size:12px; margin-bottom:10px; flex-wrap:wrap; align-items:center; }
+    .legend-group { display:flex; gap:15px; align-items:center; flex-wrap:wrap; }
     .legend-item { display:flex; align-items:center; gap:4px; }
-    .legend-color { width:12px; height:12px; border-radius:2px; }
 
     canvas { display:block; width:100%; cursor:crosshair; }
     #mainChart { height:350px; border:1px solid #ddd; border-bottom:none; position:relative; }
@@ -108,39 +108,48 @@
   </div>
 
   <div class="legend">
+  <!-- グループ1: 価格、MA1、MA2 -->
+  <div class="legend-group">
     <div class="legend-item"><div class="legend-color" style="background:#333"></div><span>価格（ローソク足）</span></div>
     <div class="legend-item"><div class="legend-color" style="background:#ff9800"></div>MA1</div>
     <div class="legend-item"><div class="legend-color" style="background:#2196f3"></div>MA2</div>
-    <div class="legend-item" style="margin-left:auto; display:flex; gap:10px; align-items:center;">
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="compareCheck">
-        <span>比較</span>
-      </label>
-      <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
-        <option value="">選択してください</option>
-      </select>
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="dateLineCheck">
-        <span>日付ライン</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="dailyCheck" checked>
-        <span>日足</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="weeklyCheck">
-        <span>週足</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="monthlyCheck">
-        <span>月足</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="rightSpaceCheck">
-        <span>右スペース</span>
-      </label>
-    </div>
   </div>
+  
+  <!-- グループ2: 比較、日付ライン -->
+  <div class="legend-group">
+    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="checkbox" id="compareCheck">
+      <span>比較</span>
+    </label>
+    <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
+      <option value="">選択してください</option>
+    </select>
+    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="checkbox" id="dateLineCheck">
+      <span>日付ライン</span>
+    </label>
+  </div>
+  
+  <!-- グループ3: 日足、週足、月足、右スペース -->
+  <div class="legend-group">
+    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="checkbox" id="dailyCheck" checked>
+      <span>日足</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="checkbox" id="weeklyCheck">
+      <span>週足</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="checkbox" id="monthlyCheck">
+      <span>月足</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="checkbox" id="rightSpaceCheck">
+      <span>右スペース</span>
+    </label>
+  </div>
+</div>
 
   <canvas id="mainChart"></canvas>
 
@@ -2444,6 +2453,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
