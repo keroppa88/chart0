@@ -63,6 +63,7 @@
       <select id="modeSelect">
         <option value="all">全銘柄</option>
         <option value="225">225銘柄</option>
+        <option value="500">500銘柄</option>
       </select>
     </div>
 
@@ -246,6 +247,7 @@
 ========================= */
 let chartListItems = null;
 let allChartListItems = null;
+let chart500ListItems = null;
 let symbolCache = new Map();
 let dailySeries = [];
 let series = [];
@@ -546,7 +548,14 @@ function populateSymbolSelect(){
   const currentCompare = compareSel?.value || "";
   
   // モードに応じた銘柄リストを選択
-  let listItems = mode === '225' ? chartListItems : allChartListItems;
+  let listItems;
+  if (mode === '225') {
+    listItems = chartListItems;
+  } else if (mode === '500') {
+    listItems = chart500ListItems;
+  } else {
+    listItems = allChartListItems;
+  }
   
   // 銘柄プルダウンを更新
   symbolSelect.innerHTML = "";
@@ -597,7 +606,7 @@ function populateSymbolSelect(){
 async function autoLoadChartList(){
   const el = document.getElementById('autoStatus');
   try{
-    el.textContent = "225chartlist.csv を読み込み中...";
+    el.textContent = "銘柄リストを読み込み中...";
     
     // 225chartlist.csv (225銘柄) を読み込み
     const res225 = await fetch('./225chartlist.csv');
@@ -610,7 +619,20 @@ async function autoLoadChartList(){
       throw new Error("225chartlist.csv が空または形式が不正です");
     }
     
-    el.textContent = `225銘柄読込完了: ${chartListItems.length}銘柄`;
+    // 500chartlist.csv (500銘柄) を読み込み
+    try {
+      const res500 = await fetch('./500chartlist.csv');
+      if(res500.ok) {
+        const text500 = await res500.text();
+        chart500ListItems = parseChartList(text500);
+      } else {
+        console.warn('500chartlist.csv が見つかりません。');
+        chart500ListItems = [...chartListItems];
+      }
+    } catch(e) {
+      console.warn('500chartlist.csv の読み込みエラー:', e);
+      chart500ListItems = [...chartListItems];
+    }
     
     // allchartlist.csv (全銘柄) を読み込み
     try {
@@ -624,11 +646,11 @@ async function autoLoadChartList(){
         }
       } else {
         console.warn('allchartlist.csv が見つかりません。225銘柄のみ使用します。');
-        allChartListItems = [...chartListItems]; // 225銘柄をコピー
+        allChartListItems = [...chartListItems];
       }
     } catch(e) {
       console.warn('allchartlist.csv の読み込みエラー。225銘柄のみ使用します:', e);
-      allChartListItems = [...chartListItems]; // 225銘柄をコピー
+      allChartListItems = [...chartListItems];
     }
     
     populateSymbolSelect();
@@ -636,7 +658,7 @@ async function autoLoadChartList(){
     // 初回は最初の銘柄を表示
     const symbolSelect = document.getElementById('symbolSelect');
     if(symbolSelect && symbolSelect.options.length > 1) {
-      symbolSelect.selectedIndex = 1; // 0は「選択してください」なので1を選択
+      symbolSelect.selectedIndex = 1;
       await applySymbol();
     }
   }catch(e){
@@ -1088,8 +1110,15 @@ async function applySymbol(){
   // 前後の銘柄を先読み（現在のモードのリストから）
   const modeSelect = document.getElementById('modeSelect');
   const mode = modeSelect?.value || 'all';
-  const listItems = mode === '225' ? chartListItems : allChartListItems;
-  
+  let listItems;
+  if (mode === '225') {
+    listItems = chartListItems;
+  } else if (mode === '500') {
+    listItems = chart500ListItems;
+  } else {
+    listItems = allChartListItems;
+  }
+
   if(listItems) {
     preloadAdjacentSymbols(symbolSelect.selectedIndex, listItems);
   }
@@ -2355,6 +2384,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
