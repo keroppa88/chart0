@@ -28,6 +28,7 @@
     .param-group select{ padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; }
 
     .hint { font-size:12px; color:#666; }
+    .view-info { font-size:13.2px; color:#444; font-weight:500; }
     .legend { display:flex; gap:15px; font-size:12px; margin-bottom:10px; flex-wrap:wrap; align-items:center; }
     .legend-item { display:flex; align-items:center; gap:4px; }
     .legend-color { width:12px; height:12px; border-radius:2px; }
@@ -84,12 +85,7 @@
     </div>
 
     <span id="autoStatus" class="hint">225chartlist.csv を読込中...</span>
-    <span id="status" class="hint" style="margin-left:auto;"></span>
-  </div>
-
-  <div class="controls-row">
-    <span class="hint" id="viewInfo">表示本数: - / 表示範囲: -</span>
-    <span class="hint" style="margin-left:auto;">矢印ボタンで銘柄高速切替、ホイール拡大縮小、ドラッグ左右移動</span>
+    <span id="viewInfo" class="view-info" style="margin-left:auto;">表示本数: - / 表示範囲: -</span>
   </div>
 
   <div class="controls-row">
@@ -621,7 +617,7 @@ async function autoLoadChartList(){
         allChartListItems = parseChartList(textAll);
         
         if(Array.isArray(allChartListItems) && allChartListItems.length > 0){
-          el.textContent = `読込完了: 225銘柄=${chartListItems.length}, 全銘柄=${allChartListItems.length}`;
+          el.textContent = `読込完了,全銘柄=${allChartListItems.length}`;
         }
       } else {
         console.warn('allchartlist.csv が見つかりません。225銘柄のみ使用します。');
@@ -1083,12 +1079,6 @@ async function applySymbol(){
   if(q) displayCount = parseInt(q, 10);
 
   recomputeIndicators();
-
-  document.getElementById('status').textContent = 
-    (series.length > 0)
-      ? `${currentSymbolDisplay}: ${series.length}件`
-      : `${currentSymbolDisplay}: データなし`;
-
   updateViewInfo();
   drawChart();
   
@@ -2320,3 +2310,4 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
