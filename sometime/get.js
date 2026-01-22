@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 // 設定項目
-const API_KEY = ""; // 
+const API_KEY = process.env.JQUANTS_API_KEY; // GitHubのSecretsから読み込む
 const API_URL = "https://api.jquants.com/v2";
 const DATA_DIR = __dirname; // スクリプトと同じ場所に出力
 const TARGET_STOCKS = ["1929","9984","6502"];
