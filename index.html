@@ -48,6 +48,8 @@
     .btn-expand { background:#4caf50; }
     .indicator-wrapper { height:120px; transition:height 0.2s; overflow:hidden; }
     .indicator-wrapper.collapsed { height:0; }
+    .params-wrapper { display:flex; flex-wrap:wrap; gap:15px; transition:all 0.2s; overflow:hidden; }
+    .params-wrapper.collapsed { height:0; opacity:0; }
     .indicator-canvas { height:100%; width:100%; }
 
     .tooltip { position:absolute; background:rgba(255,255,255,0.95); border:1px solid #999; padding:8px; border-radius:4px; font-size:12px; pointer-events:none; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:100; line-height:1.4; white-space:nowrap; }
@@ -94,17 +96,23 @@
     <span id="viewInfo" class="view-info" style="margin-left:auto;">表示本数: - / 表示範囲: -</span>
   </div>
 
-  <div class="controls-row">
-    <div class="param-group"><label>MA1</label><input type="number" id="ma1Period" value="20"></div>
-    <div class="param-group"><label>MA2</label><input type="number" id="ma2Period" value="60"></div>
-    <div class="param-group"><label>RSI</label><input type="number" id="rsiPeriod" value="14"></div>
-    <div class="param-group"><label>Stoch K</label><input type="number" id="stochK" value="14"></div>
-    <div class="param-group"><label>Stoch D</label><input type="number" id="stochD" value="3"></div>
-    <div class="param-group"><label>MACD S</label><input type="number" id="macdShort" value="12"></div>
-    <div class="param-group"><label>MACD L</label><input type="number" id="macdLong" value="26"></div>
-    <div class="param-group"><label>Sig</label><input type="number" id="macdSignal" value="9"></div>
-    <div class="param-group"><label>ATR%</label><input type="number" id="atrPeriod" value="20"></div>
-    <div class="param-group"><label>ADX</label><input type="number" id="adxPeriod" value="14"></div>
+  <div class="controls-row" style="position:relative;">
+    <div class="indicator-controls" style="position:absolute; top:2px; right:2px;">
+      <button class="btn-icon btn-toggle" onclick="toggleParams()" id="paramsCollapseBtn">−</button>
+      <button class="btn-icon btn-expand" onclick="toggleParams()" id="paramsExpandBtn" style="display:none;">+</button>
+    </div>
+    <div id="paramsWrapper" class="params-wrapper">
+      <div class="param-group"><label>MA1</label><input type="number" id="ma1Period" value="20"></div>
+      <div class="param-group"><label>MA2</label><input type="number" id="ma2Period" value="60"></div>
+      <div class="param-group"><label>RSI</label><input type="number" id="rsiPeriod" value="14"></div>
+      <div class="param-group"><label>Stoch K</label><input type="number" id="stochK" value="14"></div>
+      <div class="param-group"><label>Stoch D</label><input type="number" id="stochD" value="3"></div>
+      <div class="param-group"><label>MACD S</label><input type="number" id="macdShort" value="12"></div>
+      <div class="param-group"><label>MACD L</label><input type="number" id="macdLong" value="26"></div>
+      <div class="param-group"><label>Sig</label><input type="number" id="macdSignal" value="9"></div>
+      <div class="param-group"><label>ATR%</label><input type="number" id="atrPeriod" value="20"></div>
+      <div class="param-group"><label>ADX</label><input type="number" id="adxPeriod" value="14"></div>
+    </div>
   </div>
 
   <div class="legend">
@@ -2132,6 +2140,35 @@ function toggleIndicator(key){
   setTimeout(resizeCanvas, 210);
 }
 
+function toggleParams(){
+  const wrapper = document.getElementById('paramsWrapper');
+  const collapseBtn = document.getElementById('paramsCollapseBtn');
+  const expandBtn = document.getElementById('paramsExpandBtn');
+  
+  if(wrapper.classList.contains('collapsed')){
+    wrapper.classList.remove('collapsed');
+    collapseBtn.style.display = 'flex';
+    expandBtn.style.display = 'none';
+  }else{
+    wrapper.classList.add('collapsed');
+    collapseBtn.style.display = 'none';
+    expandBtn.style.display = 'flex';
+  }
+}
+
+function moveIndicator(key, dir){
+  const container = document.getElementById(key + 'Container');
+  const parent = document.getElementById('indicatorsList');
+  if(dir === 'up'){
+    const prev = container.previousElementSibling;
+    if(prev) parent.insertBefore(container, prev);
+  }else{
+    const next = container.nextElementSibling;
+    if(next) parent.insertBefore(next, container);
+  }
+  setTimeout(resizeCanvas, 0);
+}
+
 function moveIndicator(key, dir){
   const container = document.getElementById(key + 'Container');
   const parent = document.getElementById('indicatorsList');
@@ -2453,6 +2490,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
