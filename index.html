@@ -50,6 +50,8 @@
     .indicator-wrapper.collapsed { height:0; }
     .params-wrapper { display:flex; flex-wrap:wrap; gap:15px; transition:all 0.2s; overflow:hidden; }
     .params-wrapper.collapsed { height:0; opacity:0; }
+    .legend-wrapper { display:flex; gap:15px; flex-wrap:wrap; transition:all 0.2s; overflow:hidden; }
+    .legend-wrapper.collapsed { height:0; opacity:0; }
     .indicator-canvas { height:100%; width:100%; }
 
     .tooltip { position:absolute; background:rgba(255,255,255,0.95); border:1px solid #999; padding:8px; border-radius:4px; font-size:12px; pointer-events:none; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:100; line-height:1.4; white-space:nowrap; }
@@ -116,40 +118,47 @@
   </div>
 
 
-<div class="legend" style="justify-content:flex-end;">
-  <!-- グループ2: 比較、日付ライン -->
-  <div class="legend-group">
-    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-      <input type="checkbox" id="compareCheck">
-      <span>比較</span>
-    </label>
-    <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
-      <option value="">選択してください</option>
-    </select>
-    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-      <input type="checkbox" id="dateLineCheck">
-      <span>日付ライン</span>
-    </label>
+
+<div class="legend" style="justify-content:flex-end; position:relative;">
+  <div class="indicator-controls" style="position:absolute; top:2px; right:2px;">
+    <button class="btn-icon btn-toggle" onclick="toggleLegend()" id="legendCollapseBtn">−</button>
+    <button class="btn-icon btn-expand" onclick="toggleLegend()" id="legendExpandBtn" style="display:none;">+</button>
   </div>
-  
-  <!-- グループ3: 日足、週足、月足、右スペース -->
-  <div class="legend-group">
-    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-      <input type="checkbox" id="dailyCheck" checked>
-      <span>日足</span>
-    </label>
-    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-      <input type="checkbox" id="weeklyCheck">
-      <span>週足</span>
-    </label>
-    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-      <input type="checkbox" id="monthlyCheck">
-      <span>月足</span>
-    </label>
-    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-      <input type="checkbox" id="rightSpaceCheck">
-      <span>右スペース</span>
-    </label>
+  <div id="legendWrapper" class="legend-wrapper">
+    <!-- グループ2: 比較、日付ライン -->
+    <div class="legend-group">
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="compareCheck">
+        <span>比較</span>
+      </label>
+      <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
+        <option value="">選択してください</option>
+      </select>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="dateLineCheck">
+        <span>日付ライン</span>
+      </label>
+    </div>
+    
+    <!-- グループ3: 日足、週足、月足、右スペース -->
+    <div class="legend-group">
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="dailyCheck" checked>
+        <span>日足</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="weeklyCheck">
+        <span>週足</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="monthlyCheck">
+        <span>月足</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="rightSpaceCheck">
+        <span>右スペース</span>
+      </label>
+    </div>
   </div>
 </div>
 
@@ -2150,6 +2159,22 @@ function toggleParams(){
   }
 }
 
+function toggleLegend(){
+  const wrapper = document.getElementById('legendWrapper');
+  const collapseBtn = document.getElementById('legendCollapseBtn');
+  const expandBtn = document.getElementById('legendExpandBtn');
+  
+  if(wrapper.classList.contains('collapsed')){
+    wrapper.classList.remove('collapsed');
+    collapseBtn.style.display = 'flex';
+    expandBtn.style.display = 'none';
+  }else{
+    wrapper.classList.add('collapsed');
+    collapseBtn.style.display = 'none';
+    expandBtn.style.display = 'flex';
+  }
+}
+
 function moveIndicator(key, dir){
   const container = document.getElementById(key + 'Container');
   const parent = document.getElementById('indicatorsList');
@@ -2484,6 +2509,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
