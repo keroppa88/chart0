@@ -59,14 +59,13 @@
 
   <div class="controls-row" style="margin-top:15px;">
     <div class="param-group">
-      <label>全銘柄</label>
-      <select id="allSymbolSelect">
-        <option value="">選択してください</option>
+      <select id="modeSelect">
+        <option value="all">全銘柄</option>
+        <option value="225">225銘柄</option>
       </select>
     </div>
 
     <div class="param-group">
-      <label>225銘柄</label>
       <select id="symbolSelect">
         <option value="">読み込み中...</option>
       </select>
@@ -537,59 +536,42 @@ function preloadAdjacentSymbols(currentIndex, listItems){
 }
 
 function populateSymbolSelect(){
-  const sel225 = document.getElementById('symbolSelect');
-  const selAll = document.getElementById('allSymbolSelect');
+  const modeSelect = document.getElementById('modeSelect');
+  const symbolSelect = document.getElementById('symbolSelect');
   const compareSel = document.getElementById('compareSymbolSelect');
-  if(!sel225) return;
+  if(!symbolSelect) return;
   
-  const current225 = sel225.value;
-  const currentAll = selAll?.value || "";
+  const mode = modeSelect?.value || 'all';
+  const currentSymbol = symbolSelect.value;
   const currentCompare = compareSel?.value || "";
   
-  // 225銘柄プルダウン
-  sel225.innerHTML = "";
-  if(!Array.isArray(chartListItems) || chartListItems.length === 0){
+  // モードに応じた銘柄リストを選択
+  let listItems = mode === '225' ? chartListItems : allChartListItems;
+  
+  // 銘柄プルダウンを更新
+  symbolSelect.innerHTML = "";
+  
+  if(!Array.isArray(listItems) || listItems.length === 0){
     const opt = document.createElement('option');
     opt.value = "";
     opt.textContent = "銘柄リストが空です";
-    sel225.appendChild(opt);
+    symbolSelect.appendChild(opt);
   } else {
     const defaultOpt = document.createElement('option');
     defaultOpt.value = "";
     defaultOpt.textContent = "選択してください";
-    sel225.appendChild(defaultOpt);
+    symbolSelect.appendChild(defaultOpt);
     
-    for(const item of chartListItems){
+    for(const item of listItems){
       const opt = document.createElement('option');
       opt.value = item.code;
       opt.textContent = `${item.code} ${item.name}`;
-      sel225.appendChild(opt);
+      symbolSelect.appendChild(opt);
     }
     
-    if(current225 && chartListItems.some(item => item.code === current225)){
-      sel225.value = current225;
-    }
-  }
-  
-  // 全銘柄プルダウン
-  if(selAll) {
-    selAll.innerHTML = "";
-    const defaultOpt = document.createElement('option');
-    defaultOpt.value = "";
-    defaultOpt.textContent = "選択してください";
-    selAll.appendChild(defaultOpt);
-    
-    if(Array.isArray(allChartListItems) && allChartListItems.length > 0){
-      for(const item of allChartListItems){
-        const opt = document.createElement('option');
-        opt.value = item.code;
-        opt.textContent = `${item.code} ${item.name}`;
-        selAll.appendChild(opt);
-      }
-      
-      if(currentAll && allChartListItems.some(item => item.code === currentAll)){
-        selAll.value = currentAll;
-      }
+    // 以前選択していた銘柄が新しいリストにも存在すれば再選択
+    if(currentSymbol && listItems.some(item => item.code === currentSymbol)){
+      symbolSelect.value = currentSymbol;
     }
   }
   
@@ -651,10 +633,10 @@ async function autoLoadChartList(){
     
     populateSymbolSelect();
     
-    // 初回は225銘柄の最初の銘柄を表示
-    const sel225 = document.getElementById('symbolSelect');
-    if(sel225 && sel225.options.length > 1) {
-      sel225.selectedIndex = 1; // 0は「選択してください」なので1を選択
+    // 初回は最初の銘柄を表示
+    const symbolSelect = document.getElementById('symbolSelect');
+    if(symbolSelect && symbolSelect.options.length > 1) {
+      symbolSelect.selectedIndex = 1; // 0は「選択してください」なので1を選択
       await applySymbol();
     }
   }catch(e){
@@ -1083,27 +1065,12 @@ function updateViewInfo(){
 }
 
 async function applySymbol(){
-  const sel225 = document.getElementById('symbolSelect');
-  const selAll = document.getElementById('allSymbolSelect');
-  
-  // どちらのプルダウンが選択されているか判定
-  let code = null;
-  let selectedOption = null;
-  
-  if(sel225?.value) {
-    code = sel225.value;
-    selectedOption = sel225.selectedOptions?.[0];
-    // 全銘柄プルダウンをクリア
-    if(selAll) selAll.value = "";
-  } else if(selAll?.value) {
-    code = selAll.value;
-    selectedOption = selAll.selectedOptions?.[0];
-    // 225銘柄プルダウンをクリア
-    if(sel225) sel225.value = "";
-  }
+  const symbolSelect = document.getElementById('symbolSelect');
+  const code = symbolSelect?.value;
   
   if(!code) return;
   
+  const selectedOption = symbolSelect?.selectedOptions?.[0];
   currentSymbolDisplay = selectedOption?.textContent || code;
   
   dailySeries = await loadSymbolCSV(code);
@@ -1124,11 +1091,13 @@ async function applySymbol(){
   updateViewInfo();
   drawChart();
   
-  // 前後の銘柄を先読み（現在選択中のリストから）
-  if(sel225?.value && chartListItems) {
-    preloadAdjacentSymbols(sel225.selectedIndex, chartListItems);
-  } else if(selAll?.value && allChartListItems) {
-    preloadAdjacentSymbols(selAll.selectedIndex, allChartListItems);
+  // 前後の銘柄を先読み（現在のモードのリストから）
+  const modeSelect = document.getElementById('modeSelect');
+  const mode = modeSelect?.value || 'all';
+  const listItems = mode === '225' ? chartListItems : allChartListItems;
+  
+  if(listItems) {
+    preloadAdjacentSymbols(symbolSelect.selectedIndex, listItems);
   }
 }
 
@@ -2177,39 +2146,15 @@ function setupEventListeners(){
     if(e.key === 'Escape' && helpModal.style.display === 'flex') closeHelp(); 
   });
 
-  // 225銘柄プルダウンのイベント
+  // モード切替のイベント
+  document.getElementById('modeSelect')?.addEventListener('change', () => {
+    populateSymbolSelect();
+  });
+
+  // 銘柄選択のイベント
   document.getElementById('symbolSelect')?.addEventListener('change', () => applySymbol());
 
   document.getElementById('symbolSelect')?.addEventListener('keydown', (e) => {
-    const sel = e.target;
-    const currentIndex = sel.selectedIndex;
-    const maxIndex = sel.options.length - 1;
-    let newIndex = currentIndex;
-
-    if(e.key === 'ArrowRight'){
-      e.preventDefault();
-      newIndex = Math.min(currentIndex + 1, maxIndex);
-    }else if(e.key === 'ArrowLeft'){
-      e.preventDefault();
-      newIndex = Math.max(currentIndex - 1, 0);
-    }else if(e.key === 'ArrowDown'){
-      e.preventDefault();
-      newIndex = Math.min(currentIndex + 10, maxIndex);
-    }else if(e.key === 'ArrowUp'){
-      e.preventDefault();
-      newIndex = Math.max(currentIndex - 10, 0);
-    }
-
-    if(newIndex !== currentIndex){
-      sel.selectedIndex = newIndex;
-      applySymbol();
-    }
-  });
-
-  // 全銘柄プルダウンのイベント
-  document.getElementById('allSymbolSelect')?.addEventListener('change', () => applySymbol());
-
-  document.getElementById('allSymbolSelect')?.addEventListener('keydown', (e) => {
     const sel = e.target;
     const currentIndex = sel.selectedIndex;
     const maxIndex = sel.options.length - 1;
