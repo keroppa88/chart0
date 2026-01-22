@@ -48,7 +48,7 @@
     .btn-expand { background:#4caf50; }
     .indicator-wrapper { height:120px; transition:height 0.2s; overflow:hidden; }
     .indicator-wrapper.collapsed { height:0; }
-    .params-wrapper { display:flex; flex-wrap:wrap; gap:15px; transition:all 0.2s; overflow:hidden; }
+    .params-wrapper { display:flex; flex-wrap:wrap; gap:8px; transition:all 0.2s; overflow:hidden; }
     .params-wrapper.collapsed { height:0; opacity:0; }
     .legend-wrapper { display:flex; gap:15px; flex-wrap:wrap; transition:all 0.2s; overflow:hidden; }
     .legend-wrapper.collapsed { height:0; opacity:0; }
@@ -98,7 +98,7 @@
     <span id="viewInfo" class="view-info" style="margin-left:auto;">表示本数: - / 表示範囲: -</span>
   </div>
 
-  <div class="controls-row" style="position:relative;">
+  <div class="controls-row" style="position:relative; padding-right:25px;">
     <div class="indicator-controls" style="position:absolute; top:2px; right:2px;">
       <button class="btn-icon btn-toggle" onclick="toggleParams()" id="paramsCollapseBtn">−</button>
       <button class="btn-icon btn-expand" onclick="toggleParams()" id="paramsExpandBtn" style="display:none;">+</button>
@@ -119,7 +119,7 @@
 
 
 
-<div class="legend" style="justify-content:flex-end; position:relative;">
+<div class="legend" style="position:relative; padding-right:25px;">
   <div class="indicator-controls" style="position:absolute; top:2px; right:2px;">
     <button class="btn-icon btn-toggle" onclick="toggleLegend()" id="legendCollapseBtn">−</button>
     <button class="btn-icon btn-expand" onclick="toggleLegend()" id="legendExpandBtn" style="display:none;">+</button>
@@ -2509,6 +2509,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
