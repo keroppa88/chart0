@@ -2173,29 +2173,60 @@ function setupEventListeners(){
   window.addEventListener('keydown', (e) => { 
     if(e.key === 'Escape' && helpModal.style.display === 'flex') closeHelp(); 
   });
-  // 矢印ボタンのイベント
-  document.getElementById('prevStockBtn')?.addEventListener('click', () => {
-    const symbolSelect = document.getElementById('symbolSelect');
-    if(!symbolSelect) return;
-    
-    const currentIndex = symbolSelect.selectedIndex;
-    if(currentIndex > 0) {
-      symbolSelect.selectedIndex = currentIndex - 1;
-      applySymbol();
-    }
-  });
-
-  document.getElementById('nextStockBtn')?.addEventListener('click', () => {
+  // 矢印ボタンのイベント（押しっぱなし対応）
+  let arrowInterval = null;
+  
+  const moveStock = (direction) => {
     const symbolSelect = document.getElementById('symbolSelect');
     if(!symbolSelect) return;
     
     const currentIndex = symbolSelect.selectedIndex;
     const maxIndex = symbolSelect.options.length - 1;
-    if(currentIndex < maxIndex) {
-      symbolSelect.selectedIndex = currentIndex + 1;
+    let newIndex = currentIndex;
+    
+    if(direction === 'prev' && currentIndex > 0) {
+      newIndex = currentIndex - 1;
+    } else if(direction === 'next' && currentIndex < maxIndex) {
+      newIndex = currentIndex + 1;
+    }
+    
+    if(newIndex !== currentIndex) {
+      symbolSelect.selectedIndex = newIndex;
       applySymbol();
     }
-  });
+  };
+  
+  const startArrowRepeat = (direction) => {
+    moveStock(direction); // 即座に1回実行
+    arrowInterval = setInterval(() => moveStock(direction), 150); // 150ms間隔で連続実行
+  };
+  
+  const stopArrowRepeat = () => {
+    if(arrowInterval) {
+      clearInterval(arrowInterval);
+      arrowInterval = null;
+    }
+  };
+  
+  // 前へボタン
+  const prevBtn = document.getElementById('prevStockBtn');
+  if(prevBtn) {
+    prevBtn.addEventListener('mousedown', () => startArrowRepeat('prev'));
+    prevBtn.addEventListener('mouseup', stopArrowRepeat);
+    prevBtn.addEventListener('mouseleave', stopArrowRepeat);
+    prevBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startArrowRepeat('prev'); });
+    prevBtn.addEventListener('touchend', stopArrowRepeat);
+  }
+  
+  // 次へボタン
+  const nextBtn = document.getElementById('nextStockBtn');
+  if(nextBtn) {
+    nextBtn.addEventListener('mousedown', () => startArrowRepeat('next'));
+    nextBtn.addEventListener('mouseup', stopArrowRepeat);
+    nextBtn.addEventListener('mouseleave', stopArrowRepeat);
+    nextBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startArrowRepeat('next'); });
+    nextBtn.addEventListener('touchend', stopArrowRepeat);
+  }
   
   // モード切替のイベント
   document.getElementById('modeSelect')?.addEventListener('change', () => {
@@ -2412,6 +2443,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
