@@ -12,6 +12,9 @@
     h1 { margin: 0; font-size: 1.5rem; color: #333; }
     .help-btn{ font-size:12px; padding:3px 8px; background:#e0e0e0; color:#000; border:1px solid #bdbdbd; border-radius:4px; cursor:pointer; }
     .help-btn:hover{ background:#d5d5d5; }
+    .arrow-btn{ font-size:14px; padding:4px 10px; background:#2196f3; color:#fff; border:1px solid #1976d2; border-radius:4px; cursor:pointer; font-weight:bold; }
+    .arrow-btn:hover{ background:#1976d2; }
+    .arrow-btn:active{ background:#1565c0; }
 
     .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.35); display:none; align-items:center; justify-content:center; z-index:1000; }
     .modal{ width:min(720px, calc(100vw - 40px)); background:#fff; border:1px solid #ccc; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.25); padding:14px 16px; }
@@ -56,6 +59,8 @@
   <div class="title-row">
     <h1>爆速チャートくん</h1>
     <button id="helpBtn" class="help-btn" type="button">説明</button>
+    <button id="prevStockBtn" class="arrow-btn" type="button" title="前の銘柄（←）">◀</button>
+    <button id="nextStockBtn" class="arrow-btn" type="button" title="次の銘柄（→）">▶</button>
   </div>
 
   <div class="controls-row" style="margin-top:15px;">
@@ -2168,7 +2173,30 @@ function setupEventListeners(){
   window.addEventListener('keydown', (e) => { 
     if(e.key === 'Escape' && helpModal.style.display === 'flex') closeHelp(); 
   });
+  // 矢印ボタンのイベント
+  document.getElementById('prevStockBtn')?.addEventListener('click', () => {
+    const symbolSelect = document.getElementById('symbolSelect');
+    if(!symbolSelect) return;
+    
+    const currentIndex = symbolSelect.selectedIndex;
+    if(currentIndex > 0) {
+      symbolSelect.selectedIndex = currentIndex - 1;
+      applySymbol();
+    }
+  });
 
+  document.getElementById('nextStockBtn')?.addEventListener('click', () => {
+    const symbolSelect = document.getElementById('symbolSelect');
+    if(!symbolSelect) return;
+    
+    const currentIndex = symbolSelect.selectedIndex;
+    const maxIndex = symbolSelect.options.length - 1;
+    if(currentIndex < maxIndex) {
+      symbolSelect.selectedIndex = currentIndex + 1;
+      applySymbol();
+    }
+  });
+  
   // モード切替のイベント
   document.getElementById('modeSelect')?.addEventListener('change', () => {
     populateSymbolSelect();
@@ -2384,6 +2412,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
