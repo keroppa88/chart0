@@ -159,7 +159,7 @@ async function fetchAndSave(code) {
         do {
             const params = new URLSearchParams({
                 code: code,
-                from: "2024-07-20",
+                from: "2021-01-25",
             });
             if (paginationKey) params.set("pagination_key", paginationKey);
             
