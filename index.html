@@ -1009,10 +1009,22 @@ function calculateVolumeProfile(visibleIndices, minPrice, maxPrice){
     const volume = series[sIdx]?.volume;
     
     if(vwap != null && volume != null && volume > 0){
-      // VWAPがどの価格帯に属するか計算
-      // binIndex = 0 が最上部（maxPrice）、binIndex = bins-1 が最下部（minPrice）
-      const binIndex = Math.floor((maxPrice - vwap) / binSize);
-      const clampedIndex = Math.max(0, Math.min(bins - 1, binIndex));
+      // VWAPを四捨五入
+      const roundedVWAP = Math.round(vwap);
+      
+      // 四捨五入したVWAPがどの価格帯に属するか計算
+      const binIndex = Math.floor((maxPrice - roundedVWAP) / binSize);
+      
+      // 境界値の処理
+      let clampedIndex = binIndex;
+      if(roundedVWAP >= maxPrice){
+        clampedIndex = 0;
+      } else if(roundedVWAP <= minPrice){
+        clampedIndex = bins - 1;
+      } else {
+        clampedIndex = Math.max(0, Math.min(bins - 1, binIndex));
+      }
+      
       profile[clampedIndex] += volume;
     }
   });
@@ -1518,6 +1530,7 @@ function drawMain(visibleCandles, visibleIndices){
     seriesIndex: visibleIndices[i]
   }));
 
+
   const showMonthStart = displayCount >= 60;
   const datePositions = [];
   const dateLabels = [];
@@ -1620,42 +1633,43 @@ function drawMain(visibleCandles, visibleIndices){
   });
   
  // 価格帯別出来高の描画（背景レイヤー）
-  if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
-    const volumeProfile = calculateVolumeProfile(visibleIndices, minP, maxP);
-    const maxVolume = Math.max(...volumeProfile.profile);
+if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
+  const volumeProfile = calculateVolumeProfile(visibleIndices, minP, maxP);
+  const maxVolume = Math.max(...volumeProfile.profile);
+  
+  if(maxVolume > 0){
+    const maxBarWidth = chartW * 0.5; // チャート幅の50%が最大
     
-    if(maxVolume > 0){
-      const maxBarWidth = chartW * 0.5; // チャート幅の50%が最大
+    ctx.save();
+    ctx.fillStyle = 'rgba(172, 172, 172, 0.2)';
+    
+    for(let i = 0; i < volumeProfile.bins; i++){
+      const vol = volumeProfile.profile[i];
+      if(vol === 0) continue;
       
-      ctx.save();
-      ctx.fillStyle = 'rgba(172, 172, 172, 0.2)';
+      // 価格帯の上端と下端を計算
+      const priceRangePerBin = (maxP - minP) / volumeProfile.bins;
+      const priceTop = maxP - (i * priceRangePerBin);
+      const priceBottom = maxP - ((i + 1) * priceRangePerBin);
       
-      for(let i = 0; i < volumeProfile.bins; i++){
-        const vol = volumeProfile.profile[i];
-        if(vol === 0) continue;
-        
-        // 価格帯の上端と下端のY座標を計算
-        const binHeight = (maxP - minP) / volumeProfile.bins;
-        const priceTop = maxP - (i * binHeight);
-        const priceBottom = maxP - ((i + 1) * binHeight);
-        
-        const yTop = getY(priceTop);
-        const yBottom = getY(priceBottom);
-        const height = Math.abs(yBottom - yTop);
-        
-        // 横棒の幅を計算（右から左へ伸びる）
-        const barWidth = (vol / maxVolume) * maxBarWidth;
-        
-        // 右端から左へ伸びる横棒を描画
-        const xRight = w - pad.r;
-        const xLeft = xRight - barWidth;
-        
-        ctx.fillRect(xLeft, Math.min(yTop, yBottom), barWidth, height);
-      }
+      // Y座標に変換（getY関数を使用）
+      const yTop = getY(priceTop);
+      const yBottom = getY(priceBottom);
+      const barHeight = Math.abs(yBottom - yTop);
       
-      ctx.restore();
+      // 横棒の幅を計算（最大50%）
+      const barWidth = (vol / maxVolume) * maxBarWidth;
+      
+      // 右端から左へ伸びる横棒を描画
+      const xRight = w - pad.r;
+      const xLeft = xRight - barWidth;
+      
+      ctx.fillRect(xLeft, Math.min(yTop, yBottom), barWidth, barHeight);
     }
+    
+    ctx.restore();
   }
+}
   
   const bodyW = (chartW / visibleCandles.length) * 0.6;
   ctx.lineWidth = 1;
@@ -2652,6 +2666,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
