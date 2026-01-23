@@ -1010,7 +1010,8 @@ function calculateVolumeProfile(visibleIndices, minPrice, maxPrice){
     
     if(vwap != null && volume != null && volume > 0){
       // VWAPがどの価格帯に属するか計算
-      const binIndex = Math.floor((vwap - minPrice) / binSize);
+      // binIndex = 0 が最上部（maxPrice）、binIndex = bins-1 が最下部（minPrice）
+      const binIndex = Math.floor((maxPrice - vwap) / binSize);
       const clampedIndex = Math.max(0, Math.min(bins - 1, binIndex));
       profile[clampedIndex] += volume;
     }
@@ -2651,6 +2652,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
