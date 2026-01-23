@@ -125,7 +125,7 @@
     <button class="btn-icon btn-expand" onclick="toggleLegend()" id="legendExpandBtn" style="display:none;">+</button>
   </div>
   <div id="legendWrapper" class="legend-wrapper">
-    <!-- グループ2: 比較、日付ライン -->
+    <!-- グループ2: 比較、価格帯別出来高、VWAP、日付ライン -->
     <div class="legend-group">
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
         <input type="checkbox" id="compareCheck">
@@ -134,6 +134,14 @@
       <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
         <option value="">選択してください</option>
       </select>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="volumeProfileCheck" checked>
+        <span>価格帯別出来高</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="vwapCheck" checked>
+        <span>VWAP</span>
+      </label>
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
         <input type="checkbox" id="dateLineCheck">
         <span>日付ライン</span>
@@ -319,7 +327,8 @@ let indicators = {
   stoch: { k: [], d: [] },
   macd: { macd: [], signal: [], hist: [] },
   atr: [],
-  adx: { adx: [], plusDI: [], minusDI: [] }
+  adx: { adx: [], plusDI: [], minusDI: [] },
+  vwap: [] // 追加
 };
 
 let backBuffers = { main: null, volume: null, macd: null, stoch: null, rsi: null, atr: null, adx: null };
@@ -350,7 +359,9 @@ function restoreBackBuffers(){
 let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
 let dateLineEnabled = false;
-
+let vwapEnabled = true; // 追加
+let volumeProfileEnabled = true; // 追加（将来用）
+  
 /* =========================
    Data Version
 ========================= */
@@ -402,6 +413,9 @@ function parseOHLCVFormat(text){
   const idxLow = header.findIndex(h => /low/i.test(h));
   const idxClose = header.findIndex(h => /close/i.test(h));
   const idxVolume = header.findIndex(h => /volume/i.test(h));
+  const idxTradingValue = header.findIndex(h => /tradingvalue/i.test(h)); // 追加
+  const idxUpLimit = header.findIndex(h => /uplimit/i.test(h)); // 追加
+  const idxUnderLimit = header.findIndex(h => /underlimit/i.test(h)); // 追加
   
   if(idxDate < 0 || idxClose < 0) return [];
   
@@ -416,6 +430,9 @@ function parseOHLCVFormat(text){
     const low = idxLow >= 0 ? toNum(cols[idxLow]) : null;
     const close = toNum(cols[idxClose]);
     const volume = idxVolume >= 0 ? toNum(cols[idxVolume]) : null;
+    const tradingValue = idxTradingValue >= 0 ? toNum(cols[idxTradingValue]) : null; // 追加
+    const upLimit = idxUpLimit >= 0 ? toNum(cols[idxUpLimit]) : 0; // 追加
+    const underLimit = idxUnderLimit >= 0 ? toNum(cols[idxUnderLimit]) : 0; // 追加
     
     if(!date || Number.isNaN(close)) continue;
     
@@ -425,12 +442,16 @@ function parseOHLCVFormat(text){
       high: Number.isNaN(high) ? close : high,
       low: Number.isNaN(low) ? close : low,
       close,
-      volume: Number.isNaN(volume) ? null : volume
+      volume: Number.isNaN(volume) ? null : volume,
+      tradingValue: Number.isNaN(tradingValue) ? null : tradingValue, // 追加
+      upLimit, // 追加
+      underLimit // 追加
     });
   }
   
   return rows;
 }
+
 
 function parseChartList(text){
   const raw = String(text||"").replace(/\uFEFF/g,'').trim();
@@ -474,7 +495,10 @@ function convertToWeekly(dailyData){
           high: day.high,
           low: day.low,
           close: day.close,
-          volume: day.volume || 0
+          volume: day.volume || 0,
+          tradingValue: day.tradingValue || 0, // 追加
+          upLimit: day.upLimit || 0, // 追加
+          underLimit: day.underLimit || 0 // 追加
         },
         lastDayOfWeek: dayOfWeek
       };
@@ -483,6 +507,9 @@ function convertToWeekly(dailyData){
       currentWeek.data.low = Math.min(currentWeek.data.low, day.low);
       currentWeek.data.close = day.close;
       currentWeek.data.volume += (day.volume || 0);
+      currentWeek.data.tradingValue += (day.tradingValue || 0); // 追加
+      currentWeek.data.upLimit = Math.max(currentWeek.data.upLimit, day.upLimit || 0); // 追加
+      currentWeek.data.underLimit = Math.max(currentWeek.data.underLimit, day.underLimit || 0); // 追加
       currentWeek.lastDayOfWeek = dayOfWeek;
     }
   }
@@ -516,7 +543,10 @@ function convertToMonthly(dailyData){
           high: day.high,
           low: day.low,
           close: day.close,
-          volume: day.volume || 0
+          volume: day.volume || 0,
+          tradingValue: day.tradingValue || 0, // 追加
+          upLimit: day.upLimit || 0, // 追加
+          underLimit: day.underLimit || 0 // 追加
         }
       };
     }else{
@@ -524,6 +554,9 @@ function convertToMonthly(dailyData){
       currentMonth.data.low = Math.min(currentMonth.data.low, day.low);
       currentMonth.data.close = day.close;
       currentMonth.data.volume += (day.volume || 0);
+      currentMonth.data.tradingValue += (day.tradingValue || 0); // 追加
+      currentMonth.data.upLimit = Math.max(currentMonth.data.upLimit, day.upLimit || 0); // 追加
+      currentMonth.data.underLimit = Math.max(currentMonth.data.underLimit, day.underLimit || 0); // 追加
     }
   }
   
@@ -941,7 +974,20 @@ function calculateADX(data, period){
 
   return { adx: adxLine, plusDI, minusDI };
 }
-
+// ↓↓↓ ここに追加 ↓↓↓
+function calculateVWAP(data){
+  const result = new Array(data.length).fill(null);
+  
+  for(let i = 0; i < data.length; i++){
+    const item = data[i];
+    if(item.volume != null && item.volume > 0 && item.tradingValue != null){
+      result[i] = item.tradingValue / item.volume;
+    }
+  }
+  
+  return result;
+}
+ 
 function recomputeIndicators(){
   if(!series || series.length === 0){
     indicators.ma1 = []; 
@@ -951,6 +997,7 @@ function recomputeIndicators(){
     indicators.macd = { macd: [], signal: [], hist: [] };
     indicators.atr = [];
     indicators.adx = { adx: [], plusDI: [], minusDI: [] };
+    indicators.vwap = []; // 追加
     return;
   }
   indicators.ma1 = calculateMA(series, params.ma1);
@@ -960,6 +1007,7 @@ function recomputeIndicators(){
   indicators.macd = calculateMACD(series, params.macdShort, params.macdLong, params.macdSignal);
   indicators.atr = calculateATR(series, params.atr);
   indicators.adx = calculateADX(series, params.adx);
+  indicators.vwap = calculateVWAP(series); // 追加
 }
 
 function calcStatsForVisibleWindow(){
@@ -1383,6 +1431,12 @@ function drawMain(visibleCandles, visibleIndices){
         const m2 = indicators.ma2[sIdx];
         if(m1 != null){ minP = Math.min(minP, m1); maxP = Math.max(maxP, m1); }
         if(m2 != null){ minP = Math.min(minP, m2); maxP = Math.max(maxP, m2); }
+        
+        // VWAP追加
+        if(vwapEnabled){
+          const vwap = indicators.vwap[sIdx];
+          if(vwap != null){ minP = Math.min(minP, vwap); maxP = Math.max(maxP, vwap); }
+        }
       }
     });
   }
@@ -1618,6 +1672,11 @@ function drawMain(visibleCandles, visibleIndices){
   if(!compareEnabled || !compareSymbolCode){
     drawLine(indicators.ma1, '#ff9800');
     drawLine(indicators.ma2, '#2196f3');
+    
+    // VWAP描画追加
+    if(vwapEnabled){
+      drawLine(indicators.vwap, '#9c27b0');
+    }
   }
 }
 
@@ -2044,6 +2103,7 @@ function handleTooltip(e, canvas){
   const adx = indicators.adx.adx[sIdx];
   const plusDI = indicators.adx.plusDI[sIdx];
   const minusDI = indicators.adx.minusDI[sIdx];
+  const vwap = indicators.vwap[sIdx]; // 追加
 
   const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
 
@@ -2053,6 +2113,7 @@ function handleTooltip(e, canvas){
     html += `出来高:${fmt(c.volume)}<br>`;
   }
   html += `<span style="color:#ff9800">MA${params.ma1}:${fmt(ma1)}</span> <span style="color:#2196f3">MA${params.ma2}:${fmt(ma2)}</span><br>`;
+  html += `<span style="color:#9c27b0">VWAP:${fmt(vwap)}</span><br>`; // 追加
   html += `<span style="color:#9c27b0">RSI:${fmt(rsi)}</span><br>`;
   html += `<span style="color:#00bcd4">K:${fmt(stK)}</span> <span style="color:#ff5722">D:${fmt(stD)}</span><br>`;
   html += `MACD:${fmt(macd)} Sig:${fmt(sig)}<br>`;
@@ -2350,6 +2411,16 @@ function setupEventListeners(){
     drawChart();
   });
 
+  document.getElementById('vwapCheck')?.addEventListener('change', (e) => {
+    vwapEnabled = e.target.checked;
+    drawChart();
+  });
+
+  document.getElementById('volumeProfileCheck')?.addEventListener('change', (e) => {
+    volumeProfileEnabled = e.target.checked;
+    drawChart();
+  });
+
   document.getElementById('compareCheck')?.addEventListener('change', async (e) => {
     compareEnabled = e.target.checked;
     if(compareEnabled){
@@ -2511,6 +2582,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
