@@ -130,7 +130,6 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 function convertToCsv(data) {
     const header = "Date,Open,High,Low,Close,Volume,TradingValue,UpLimit,UnderLimit\n";
     const rows = data.map(d => {
-        const date = d.Date || "";
         // 調整後カラム（Adj～）を優先的に取得
         const date = d.Date || "";
         const open = d.AdjO || "0";
@@ -183,8 +182,18 @@ async function fetchAndSave(code) {
     }
 }
 
+
 /**
  * メイン実行処理
  */
 async function main() {
-    console.log("データ取得を
+    console.log("データ取得を開始します...");
+    for (const code of TARGET_STOCKS) {
+        await fetchAndSave(code);
+        // レートリミット（Lightプラン: 60req/分）を考慮して1秒待機
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    console.log("すべての処理が完了しました。");
+}
+
+main();
