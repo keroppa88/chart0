@@ -1435,11 +1435,11 @@ function drawMain(visibleCandles, visibleIndices){
     }
   }
   
-  if(line4){
-    ctx.fillText(line4, pad.l + 5, pad.t + 85);
+    if(line4){
+      ctx.fillText(line4, pad.l + 5, pad.t + 85);
+    }
   }
-}
-ctx.restore();
+  ctx.restore();
 }
     
   let minP = Infinity, maxP = -Infinity;
@@ -2743,6 +2743,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
