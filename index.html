@@ -1402,46 +1402,49 @@ function drawMain(visibleCandles, visibleIndices){
       ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillText(`${timeframeLabel}騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
 
-      if(showFinancialInfo){
-  const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
-  ctx.fillText(line2, pad.l + 5, pad.t + 45);
-  
-  const line3 = `陽線率${fmtPct(bullRate)}（陽線時平均${fmtAvg(bullAvg)}、陰線時平均${fmtAvg(bearAvg)}）`;
-  ctx.fillText(line3, pad.l + 5, pad.t + 65);
-  
-  let line4 = "";
-  if(window.currentFinancialData && dailySeries && dailySeries.length > 0){
-    const { eps, shares } = window.currentFinancialData;
-    const latestPrice = dailySeries[dailySeries.length - 1].close;
-    
-    if(latestPrice && eps && shares){
-      const per = latestPrice / eps;
-      const perText = `PER${per.toFixed(1)}倍`;
-      
-      const marketCap = shares * latestPrice;
-      let marketCapText = "";
-      
-      const oku = Math.floor(marketCap / 100000000);
-      const chou = Math.floor(oku / 10000);
-      const remainOku = oku % 10000;
-      
-      if(chou > 0){
-        marketCapText = `時価総額${chou}兆${remainOku}億円`;
-      }else{
-        marketCapText = `時価総額${oku}億円`;
+if(showFinancialInfo){
+        const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
+        ctx.fillText(line2, pad.l + 5, pad.t + 45);
+        
+        const line3 = `陽線率${fmtPct(bullRate)}（陽線時平均${fmtAvg(bullAvg)}、陰線時平均${fmtAvg(bearAvg)}）`;
+        ctx.fillText(line3, pad.l + 5, pad.t + 65);
+        
+        let line4 = "";
+        if(window.currentFinancialData && dailySeries && dailySeries.length > 0){
+          const { eps, shares } = window.currentFinancialData;
+          const latestPrice = dailySeries[dailySeries.length - 1].close;
+          
+          if(latestPrice && eps && shares){
+            const per = latestPrice / eps;
+            const perText = `PER${per.toFixed(1)}倍`;
+            
+            const marketCap = shares * latestPrice;
+            let marketCapText = "";
+            
+            const oku = Math.floor(marketCap / 100000000);
+            const chou = Math.floor(oku / 10000);
+            const remainOku = oku % 10000;
+            
+            if(chou > 0){
+              marketCapText = `時価総額${chou}兆${remainOku}億円`;
+            }else{
+              marketCapText = `時価総額${oku}億円`;
+            }
+            
+            line4 = `${perText} ${marketCapText}`;
+          }
+        }
+        
+        if(line4){
+          ctx.fillText(line4, pad.l + 5, pad.t + 85);
+        }
       }
-      
-      line4 = `${perText} ${marketCapText}`;
     }
-  }
-  
-    if(line4){
-      ctx.fillText(line4, pad.l + 5, pad.t + 85);
-    }
-  }
     
-  ctx.restore();
-}
+    ctx.restore();
+  }
+
+
     
 let minP = Infinity, maxP = -Infinity;
 let displaySeries = visibleCandles;
@@ -2743,6 +2746,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
