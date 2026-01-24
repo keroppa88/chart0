@@ -300,6 +300,7 @@ let compareDailySeries = [];
 let compareSeries = [];
 let compareSymbolCode = "";
 let compareSymbolName = "";
+let compareRequestId = 0;
 
 let isDragging = false;
 let dragStartX = 0;
@@ -1312,6 +1313,7 @@ function updateTimeframeSeries(){
 async function loadCompareSymbol(){
   const compareSel = document.getElementById('compareSymbolSelect');
   const code = compareSel?.value;
+  const requestId = ++compareRequestId;
   
   if(!code) {
     compareDailySeries = [];
@@ -1326,6 +1328,9 @@ async function loadCompareSymbol(){
   compareSymbolCode = code;
   
   compareDailySeries = await loadSymbolCSV(code);
+  if(requestId !== compareRequestId || !compareEnabled){
+    return;
+  }
   updateTimeframeSeries();
 }
 
@@ -1459,8 +1464,9 @@ if(showFinancialInfo){
 let minP = Infinity, maxP = -Infinity;
 let displaySeries = visibleCandles;
 let displayCompareSeries = [];
+  const canCompare = compareEnabled && compareSymbolCode && compareSeries.length > 0;
   
-  if(compareEnabled && compareSymbolCode && compareSeries.length > 0){
+  if(canCompare){
     let mainFirstOpen = null;
     let compareFirstOpen = null;
     
@@ -1718,7 +1724,7 @@ let displayCompareSeries = [];
   });
   
  // 価格帯別出来高の描画（背景レイヤー）
-if(volumeProfileEnabled && !compareEnabled){
+if(volumeProfileEnabled && !canCompare){
   const volumeProfile = calculateVolumeProfile(visibleIndices, minP, maxP);
   const maxVolume = Math.max(...volumeProfile.profile);
   
@@ -2595,12 +2601,15 @@ function setupEventListeners(){
     if(compareEnabled){
       await loadCompareSymbol();
     }else{
+      compareRequestId++;
       compareSymbolCode = "";
       compareSeries = [];
+      compareDailySeries = [];
       displayCompareSeries = [];
     }
     drawChart();
   });
+
 
   document.getElementById('compareSymbolSelect')?.addEventListener('change', async (e) => {
     if(compareEnabled){
@@ -2756,6 +2765,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
