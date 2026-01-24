@@ -1,9 +1,8 @@
-// financedata フォルダ配下に、銘柄別の財務CSVを全時系列で生成する。
-// ・J-Quants /v2/fins/summary を code 指定なしで一括取得
-// ・全銘柄・全期間を取得（pagination 回し切り）
-// ・Code(5桁末尾0) → 4桁に正規化
-// ・銘柄ごとに DiscDate 昇順で CSV を丸ごと書き直す
-// ・差分比較・追記判定はしない（常に再生成）
+// financedata フォルダ配下の銘柄別CSVに、
+// 当日(date指定)の財務スナップショットを追記する。
+// ・/v2/fins/summary を date 指定・code 未指定で一括取得
+// ・既存CSVに DiscDate が無ければ追記
+// ・過去分は触らない（ベースCSV前提）
 
 const fs = require("fs");
 const path = require("path");
@@ -12,19 +11,23 @@ const API_KEY = process.env.JQUANTS_API_KEY;
 const API_URL = "https://api.jquants.com/v2";
 const DATA_DIR = path.join(__dirname, "financedata");
 
-// 5桁末尾0 → 4桁正規化
+// JST 当日
+const TARGET_DATE = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  .toISOString()
+  .slice(0, 10);
+
+// 5桁末尾0 → 4桁
 function normalizeCode(code) {
   const c = String(code);
   return (c.length === 5 && c.endsWith("0")) ? c.slice(0, 4) : c;
 }
 
-// 全財務データ一括取得
-async function fetchAllFinance() {
+async function fetchFinanceByDate(date) {
   const all = [];
   let paginationKey = null;
 
   while (true) {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({ date });
     if (paginationKey) params.set("pagination_key", paginationKey);
 
     const res = await fetch(`${API_URL}/fins/summary?${params}`, {
@@ -48,42 +51,48 @@ async function fetchAllFinance() {
 }
 
 async function updateAllFinance() {
-  console.log("財務データ一括取得を開始します…");
+  console.log(`${TARGET_DATE} の財務スナップショット取得開始…`);
 
-  const all = await fetchAllFinance();
+  const all = await fetchFinanceByDate(TARGET_DATE);
   console.log(`API取得完了: ${all.length} 件`);
 
-  // Code -> 行配列
+  // Code -> 最新行
   const map = new Map();
-
   for (const d of all) {
     if (!d?.Code || !d?.DiscDate) continue;
-
     const code = normalizeCode(d.Code);
-    if (!map.has(code)) map.set(code, []);
-    map.get(code).push(d);
+    map.set(code, d);
   }
 
-  let written = 0;
+  const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith(".csv"));
 
-  for (const [code, rows] of map) {
-    // 開示日昇順
-    rows.sort((a, b) => a.DiscDate.localeCompare(b.DiscDate));
+  let appended = 0;
+  let skipped = 0;
 
-    const header = "DiscDate,DiscTime,Code,NP,EPS,BPS,FDivAnn\n";
-    const body = rows.map(d =>
+  for (const file of files) {
+    const code = path.basename(file, ".csv");
+    const d = map.get(code);
+    if (!d) continue;
+
+    const filePath = path.join(DATA_DIR, file);
+    const content = fs.readFileSync(filePath, "utf-8");
+
+    // 既に同じ開示日があれば何もしない
+    if (content.includes(d.DiscDate)) {
+      skipped++;
+      continue;
+    }
+
+    const newLine =
+      (content.endsWith("\n") ? "" : "\n") +
       `${d.DiscDate},${d.DiscTime ?? ""},${code},` +
-      `${d.NP ?? ""},${d.EPS ?? ""},${d.BPS ?? ""},${d.FDivAnn ?? ""}`
-    ).join("\n");
+      `${d.NP ?? ""},${d.EPS ?? ""},${d.BPS ?? ""},${d.FDivAnn ?? ""}\n`;
 
-    const csv = header + body + "\n";
-    const filePath = path.join(DATA_DIR, `${code}.csv`);
-
-    fs.writeFileSync(filePath, csv);
-    written++;
+    fs.appendFileSync(filePath, newLine);
+    appended++;
   }
 
-  console.log(`✅ CSV生成完了: ${written} 銘柄`);
+  console.log(`✅ 完了: 追記 ${appended}, 既存 ${skipped}`);
 }
 
 updateAllFinance().catch((e) => {
