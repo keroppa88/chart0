@@ -20,23 +20,7 @@ jobs:
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
 
-      # ★★★ ここに入れる ★★★
-      - name: Debug after update_daily
-        run: |
-          echo "PWD=$(pwd)"
-          echo "=== data dir ==="
-          ls -la data || true
-          echo "=== git status --porcelain ==="
-          git status --porcelain
-          echo "=== git diff --name-only ==="
-          git diff --name-only || true
-          echo "=== tail check ==="
-          for f in data/*.csv; do
-            echo "---- $f"
-            tail -n 3 "$f"
-            break
-          done
-
+     
       # 財務情報更新
       - name: Update Finance Data
         run: node update_f_daily.js
