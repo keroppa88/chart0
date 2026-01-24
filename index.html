@@ -2540,21 +2540,28 @@ function setupEventListeners(){
   // 銘柄選択のイベント
   document.getElementById('symbolSelect')?.addEventListener('change', () => applySymbol());
 
+  const getFirstSelectableIndex = (sel) => {
+    if(!sel?.options?.length) return 0;
+    const firstValidIndex = Array.from(sel.options).findIndex((opt) => opt.value !== "");
+    return firstValidIndex === -1 ? 0 : firstValidIndex;
+  };
+
   document.getElementById('symbolSelect')?.addEventListener('keydown', (e) => {
     const sel = e.target;
     const currentIndex = sel.selectedIndex;
     const maxIndex = sel.options.length - 1;
+    const firstIndex = getFirstSelectableIndex(sel);
     let newIndex = currentIndex;
 
     if(e.key === 'ArrowRight'){
       e.preventDefault();
-      newIndex = Math.min(currentIndex + 1, maxIndex);
+      newIndex = currentIndex >= maxIndex ? firstIndex : Math.min(currentIndex + 1, maxIndex);
     }else if(e.key === 'ArrowLeft'){
       e.preventDefault();
       newIndex = Math.max(currentIndex - 1, 0);
     }else if(e.key === 'ArrowDown'){
       e.preventDefault();
-      newIndex = Math.min(currentIndex + 10, maxIndex);
+      newIndex = currentIndex + 10 > maxIndex ? firstIndex : Math.min(currentIndex + 10, maxIndex);
     }else if(e.key === 'ArrowUp'){
       e.preventDefault();
       newIndex = Math.max(currentIndex - 10, 0);
@@ -2564,6 +2571,34 @@ function setupEventListeners(){
       sel.selectedIndex = newIndex;
       applySymbol();
     }
+  });
+
+  document.getElementById('compareSymbolSelect')?.addEventListener('keydown', (e) => {
+    const sel = e.target;
+    const currentIndex = sel.selectedIndex;
+    const maxIndex = sel.options.length - 1;
+    const firstIndex = getFirstSelectableIndex(sel);
+    let newIndex = currentIndex;
+
+    if(e.key === 'ArrowRight'){
+      e.preventDefault();
+      newIndex = currentIndex >= maxIndex ? firstIndex : Math.min(currentIndex + 1, maxIndex);
+    }else if(e.key === 'ArrowLeft'){
+      e.preventDefault();
+      newIndex = Math.max(currentIndex - 1, 0);
+    }else if(e.key === 'ArrowDown'){
+      e.preventDefault();
+      newIndex = currentIndex + 10 > maxIndex ? firstIndex : Math.min(currentIndex + 10, maxIndex);
+    }else if(e.key === 'ArrowUp'){
+      e.preventDefault();
+      newIndex = Math.max(currentIndex - 10, 0);
+    }
+
+    if(newIndex !== currentIndex){
+      sel.selectedIndex = newIndex;
+      sel.dispatchEvent(new Event('change'));
+    }
+  });
   });
 
   document.getElementById('quickSelect')?.addEventListener('change', (e) => {
@@ -2711,14 +2746,16 @@ function setupEventListeners(){
     
     const currentIndex = symbolSelect.selectedIndex;
     const maxIndex = symbolSelect.options.length - 1;
+    const firstIndex = Array.from(symbolSelect.options).findIndex((opt) => opt.value !== "");
+    const fallbackIndex = firstIndex === -1 ? 0 : firstIndex;
     let newIndex = currentIndex;
 
     if(e.key === 'ArrowRight'){
-      newIndex = Math.min(currentIndex + 1, maxIndex);
+      newIndex = currentIndex >= maxIndex ? fallbackIndex : Math.min(currentIndex + 1, maxIndex);
     }else if(e.key === 'ArrowLeft'){
       newIndex = Math.max(currentIndex - 1, 0);
     }else if(e.key === 'ArrowDown'){
-      newIndex = Math.min(currentIndex + 10, maxIndex);
+      newIndex = currentIndex + 10 > maxIndex ? fallbackIndex : Math.min(currentIndex + 10, maxIndex);
     }else if(e.key === 'ArrowUp'){
       newIndex = Math.max(currentIndex - 10, 0);
     }
@@ -2765,6 +2802,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
