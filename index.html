@@ -1060,6 +1060,7 @@ async function loadFinancialData(code){
     
     return { eps, shares };
   }catch(e){
+    console.log(`財務データ読み込みエラー (${code}):`, e);
     return null;
   }
 }
@@ -1251,7 +1252,13 @@ async function applySymbol(){
   dailySeries = await loadSymbolCSV(code);
   updateTimeframeSeries();
 
-  window.currentFinancialData = await loadFinancialData(code);
+  // 財務情報を読み込み（エラーでも処理を継続）
+  try{
+    window.currentFinancialData = await loadFinancialData(code);
+  }catch(e){
+    console.log('財務データ読み込み失敗:', e);
+    window.currentFinancialData = null;
+  }
   
   offsetX = 0;
 
@@ -1262,7 +1269,7 @@ async function applySymbol(){
   updateViewInfo();
   drawChart();
   
-  // 前後の銘柄を先読み（現在のモードのリストから）
+  // 前後の銘柄を先読み
   const modeSelect = document.getElementById('modeSelect');
   const mode = modeSelect?.value || 'all';
   let listItems;
@@ -2736,6 +2743,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
