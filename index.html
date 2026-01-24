@@ -126,6 +126,13 @@
         </label>
         <input type="number" id="dochianPeriod" value="20">
       </div>
+      <div class="param-group">
+        <label style="display:flex; align-items:center; gap:4px;">
+        <input type="checkbox" id="keltnerCheck" checked>
+        <span>Keltner</span>
+        </label>
+        <input type="number" id="keltnerPeriod" value="20">
+      </div>
     </div>
   </div>
 
@@ -331,8 +338,8 @@ let params = {
   dochian: 20,
   dochianEnabled: false,
   keltner: 20,
-  keltnerEnabled: false
-};
+  keltnerEnabled: true
+};␊
 
 let mainCanvas, mainCtx;
 let volumeCanvas, volumeCtx;
@@ -3027,6 +3034,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
