@@ -1829,6 +1829,8 @@ let displayCompareSeries = [];
     return;
   }
 
+  const rawMinP = minP;
+  const rawMaxP = maxP;
   const range = (maxP - minP) || 1;
   minP -= range * 0.05; 
   maxP += range * 0.05;
@@ -1971,7 +1973,7 @@ let displayCompareSeries = [];
   
  // 価格帯別出来高の描画（背景レイヤー）
 if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
-  const volumeProfile = calculateVolumeProfile(visibleIndices, minP, maxP);
+  const volumeProfile = calculateVolumeProfile(visibleIndices, rawMinP, rawMaxP);
   const maxVolume = Math.max(...volumeProfile.profile);
   
   if(maxVolume > 0){
@@ -3043,6 +3045,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
