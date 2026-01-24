@@ -278,7 +278,7 @@
 <div id="helpModal" class="modal-overlay" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
     <div class="modal-header">
-      <p class="modal-title" id="helpModalTitle">使い方</p>
+      <p class="modal-title" id="helpModalTitle">　　使い方</p>
       <button id="helpCloseBtn" class="modal-close" type="button">閉じる</button>
     </div>
     <div class="modal-body">
@@ -290,6 +290,7 @@
 　　マウスホイールで期間増減、ドラッグで左右移動。
 　　日足・週足・月足の切り替え。
 　　移動平均線、VWAP線、ドンチャン・チャンネル、ケルトナー・チャンネル、価格帯別出来高など。
+　　価格帯別出来高はVWAPで計算しているので、グラフ表示の見た目がローソク足終値と一致しないことがある。
 　　情報としてチャート表示期間の勝率、陽線率、騰落率、比較時の相関係数などを表示。
 　　JPX配信の財務データから時価総額、通期予想PERなども表示。
 　　任意の銘柄を比較対象にすることができる。表示範囲初日始値＝100。
@@ -302,7 +303,7 @@
 　　商品ETF、海外株式ETFは「為替ヘッジ無し」。円ベースの値動き。
 ●仕様
 　　平日17時台に当日終値を自動更新。
-　　公式JPXAPI→githubに個別CSV設置→HTMLブラウザアプリで表示。
+　　公式JPXAPIでデータ取得→github上の個別CSVにデータ収納→HTMLブラウザアプリで表示。
 　　chatGPT、Claudeの問答をプログラムに手でコピペする原始人スタイルで開発。
 　　2026/01/19～
 ●開発趣旨
@@ -3047,6 +3048,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
