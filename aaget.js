@@ -1,9 +1,9 @@
-// dataフォルダ内の銘柄別CSVに、当日分のOHLC等を「追記 or 最終行上書き」で反映する。
+// dataフォルダ内の銘柄別CSVに、指定日(TARGET_DATE)のOHLC等を「追記 or 最終行上書き」で反映する。
 // 前提：
 // - CSVは必ずヘッダ行あり
 // - 日付昇順
 // - 最新日付は必ず最終行
-// - 当日分は「存在するなら必ず最終行」になる（= 過去に同日が途中に紛れない）
+// - TARGET_DATE が存在するなら必ず最終行になる（= 過去に同日が途中に紛れない）
 
 const fs = require("fs");
 const path = require("path");
@@ -12,8 +12,8 @@ const API_KEY = process.env.JQUANTS_API_KEY;
 const API_URL = "https://api.jquants.com/v2";
 const DATA_DIR = path.join(__dirname, "aadata");
 
-// JSTのYYYY-MM-DD
-const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+// ★今回の確認用に固定
+const TARGET_DATE = "2026-01-23";
 
 function hasPrice(d) {
   const O = d.AdjO ?? d.O;
@@ -36,10 +36,8 @@ function toCsvLine(d) {
 }
 
 // 最終行だけ見て upsert（超高速）
-function upsertTodayRowFast(filePath, d) {
+function upsertRowFast(filePath, d) {
   const content = fs.readFileSync(filePath, "utf-8");
-
-  // 末尾改行を除去して配列化（空行は想定しないが念のため）
   const lines = content.replace(/\s+$/g, "").split("\n");
   if (lines.length < 2) throw new Error("CSV is too short");
 
@@ -50,20 +48,17 @@ function upsertTodayRowFast(filePath, d) {
   const newLine = toCsvLine(d);
 
   if (lastDate === d.Date) {
-    // 上書き
     lines[lastIdx] = newLine;
     fs.writeFileSync(filePath, lines.join("\n") + "\n");
     return "updated";
   }
 
-  // 追記（昇順保証なので最後に足すだけ）
   lines.push(newLine);
   fs.writeFileSync(filePath, lines.join("\n") + "\n");
   return "appended";
 }
 
 async function fetchAllDailyByDate(date) {
-  // date指定で「全上場銘柄」取得。pagination_keyを回し切る。
   const all = [];
   let paginationKey = null;
 
@@ -83,7 +78,7 @@ async function fetchAllDailyByDate(date) {
 
     const next = json.pagination_key;
     if (!next) break;
-    if (next === paginationKey) break; // 念のための無限ループ防止
+    if (next === paginationKey) break;
     paginationKey = next;
   }
 
@@ -92,19 +87,22 @@ async function fetchAllDailyByDate(date) {
 
 async function updateAllStocks() {
   const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith(".csv"));
-  console.log(`${today} のデータ更新を開始します（対象: ${files.length} 銘柄）...`);
+  console.log(`${TARGET_DATE} のデータ更新を開始します（対象: ${files.length} 銘柄）...`);
 
-  // 1) 全銘柄を一括取得
-  const all = await fetchAllDailyByDate(today);
+  const all = await fetchAllDailyByDate(TARGET_DATE);
   console.log(`API取得完了: ${all.length} 件`);
 
-  // 2) Code -> record のMap
+  // 確認用：日付がズレたデータが混ざってないか軽くチェック
+  const bad = all.find((d) => d?.Date && d.Date !== TARGET_DATE);
+  if (bad) {
+    console.warn(`⚠️ DateがTARGET_DATEと一致しないデータあり: Code=${bad.Code}, Date=${bad.Date}`);
+  }
+
   const map = new Map();
   for (const d of all) {
     if (d?.Code) map.set(String(d.Code), d);
   }
 
-  // 3) ローカルにある銘柄CSVだけ更新（無ければ捨てる）
   let appended = 0,
     updated = 0,
     skippedNoData = 0,
@@ -126,7 +124,7 @@ async function updateAllStocks() {
 
     const filePath = path.join(DATA_DIR, file);
     try {
-      const r = upsertTodayRowFast(filePath, d);
+      const r = upsertRowFast(filePath, d);
       if (r === "appended") appended++;
       else updated++;
     } catch (e) {
