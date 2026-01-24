@@ -106,6 +106,7 @@
     <div id="paramsWrapper" class="params-wrapper">
       <div class="param-group"><label>MA1</label><input type="number" id="ma1Period" value="20"></div>
       <div class="param-group"><label>MA2</label><input type="number" id="ma2Period" value="60"></div>
+      <div class="param-group"><label>VWAP</label><input type="number" id="vwapPeriod" value="5"></div>
       <div class="param-group"><label>RSI</label><input type="number" id="rsiPeriod" value="14"></div>
       <div class="param-group"><label>Stoch K</label><input type="number" id="stochK" value="14"></div>
       <div class="param-group"><label>Stoch D</label><input type="number" id="stochD" value="3"></div>
@@ -144,10 +145,7 @@
         <input type="checkbox" id="volumeProfileCheck">
         <span>価格帯別出来高</span>
       </label>
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="vwapCheck">
-        <span>VWAP</span>
-      </label>
+
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
         <input type="checkbox" id="dateLineCheck">
         <span>日付ライン</span>
@@ -309,6 +307,7 @@ let dragStartOffset = 0;
 
 let params = {
   ma1: 20, ma2: 60,
+  vwap: 5,  // 追加
   rsi: 14,
   stochK: 14, stochD: 3,
   macdShort: 12, macdLong: 26, macdSignal: 9,
@@ -367,7 +366,6 @@ function restoreBackBuffers(){
 let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
 let dateLineEnabled = false;
-let vwapEnabled = false; // 追加
 let volumeProfileEnabled = false; // 追加（将来用）
 let showFinancialInfo = true; // 追加
   
@@ -984,13 +982,25 @@ function calculateADX(data, period){
   return { adx: adxLine, plusDI, minusDI };
 }
 // ↓↓↓ ここに追加 ↓↓↓
-function calculateVWAP(data){
+function calculateVWAP(data, period){
   const result = new Array(data.length).fill(null);
   
-  for(let i = 0; i < data.length; i++){
-    const item = data[i];
-    if(item.volume != null && item.volume > 0 && item.tradingValue != null){
-      result[i] = item.tradingValue / item.volume;
+  if(period === 0) return result; // 0の場合は非表示
+  
+  for(let i = period - 1; i < data.length; i++){
+    let totalTradingValue = 0;
+    let totalVolume = 0;
+    
+    for(let j = 0; j < period; j++){
+      const item = data[i - j];
+      if(item.volume != null && item.volume > 0 && item.tradingValue != null){
+        totalTradingValue += item.tradingValue;
+        totalVolume += item.volume;
+      }
+    }
+    
+    if(totalVolume > 0){
+      result[i] = totalTradingValue / totalVolume;
     }
   }
   
@@ -1085,7 +1095,7 @@ function recomputeIndicators(){
   indicators.macd = calculateMACD(series, params.macdShort, params.macdLong, params.macdSignal);
   indicators.atr = calculateATR(series, params.atr);
   indicators.adx = calculateADX(series, params.adx);
-  indicators.vwap = calculateVWAP(series); // 追加
+  indicators.vwap = calculateVWAP(series, params.vwap);
 }
 
 function calcStatsForVisibleWindow(){
@@ -1552,7 +1562,7 @@ let displayCompareSeries = [];
         if(m2 != null){ minP = Math.min(minP, m2); maxP = Math.max(maxP, m2); }
         
         // VWAP追加
-        if(vwapEnabled){
+        if(params.vwap > 0){
           const vwap = indicators.vwap[sIdx];
           if(vwap != null){ minP = Math.min(minP, vwap); maxP = Math.max(maxP, vwap); }
         }
@@ -1833,7 +1843,7 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
     drawLine(indicators.ma2, '#2196f3');
     
     // VWAP描画追加
-    if(vwapEnabled){
+    if(params.vwap > 0){
       drawLine(indicators.vwap, '#9c27b0');
     }
   }
@@ -2570,7 +2580,7 @@ function setupEventListeners(){
     drawChart();
   });
 
-  document.getElementById('vwapCheck')?.addEventListener('change', (e) => {
+  document.getElementById('vwapCheck')?.addEventListener('change', (e) => {    
     vwapEnabled = e.target.checked;
     drawChart();
   });
@@ -2639,10 +2649,11 @@ function setupEventListeners(){
     inp.addEventListener('change', e => {
       const id = e.target.id;
       const val = parseInt(e.target.value, 10);
-      if(!(val > 0)) return;
+      if(!(val >= 0)) return;
 
       if(id === 'ma1Period') params.ma1 = val;
       if(id === 'ma2Period') params.ma2 = val;
+      if(id === 'vwapPeriod') params.vwap = val;
       if(id === 'rsiPeriod') params.rsi = val;
       if(id === 'stochK') params.stochK = val;
       if(id === 'stochD') params.stochD = val;
@@ -2746,6 +2757,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
