@@ -10,7 +10,7 @@ const path = require("path");
 
 const API_KEY = process.env.JQUANTS_API_KEY;
 const API_URL = "https://api.jquants.com/v2";
-const DATA_DIR = path.join(__dirname, "data");
+const DATA_DIR = path.join(__dirname, "aadata");
 
 // JSTのYYYY-MM-DD
 const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
