@@ -22,10 +22,10 @@ jobs:
 
      
       # 財務情報更新
-      #- name: Update Finance Data
-       # run: node update_f_daily.js
-        #env:
-         # JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+      - name: Update Finance Data
+        run: node update_f_daily.js
+        env:
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
 
       # コミット＆プッシュ
       - name: Commit and Push
