@@ -12,7 +12,7 @@
     h1 { margin: 0; font-size: 1.5rem; color: #333; }
     .help-btn{ font-size:12px; padding:3px 8px; background:#e0e0e0; color:#000; border:1px solid #bdbdbd; border-radius:4px; cursor:pointer; }
     .help-btn:hover{ background:#d5d5d5; }
-    .arrow-btn{ font-size:12px; padding:3px 8px; background:#e0e0e0; color:#000; border:1px solid #bdbdbd; border-radius:4px; cursor:pointer; }
+    .arrow-btn{ font-size:12px; padding:3px 8px; background::#e0e0e0; color:#000; border:1px solid #bdbdbd; border-radius:4px; cursor:pointer; }
     .arrow-btn:hover{ background:#d5d5d5; }
     .arrow-btn:active{ background:#c0c0c0; }
 
@@ -129,15 +129,15 @@
     <!-- グループ2: 比較、価格帯別出来高、VWAP、日付ライン -->
     <div class="legend-group">
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="financialInfoCheck" checked>
+        <input type="checkbox" id="compareCheck">
         <span>情報</span>
       </label>
 
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="compareCheck">
-        <span>比較</span>
+ 　　　　 <input type="checkbox" id="financialInfoCheck" checked>
+　　　　  <span>比較</span>
       </label>
-       
+     
       <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
         <option value="">選択してください</option>
       </select>
@@ -300,7 +300,6 @@ let compareDailySeries = [];
 let compareSeries = [];
 let compareSymbolCode = "";
 let compareSymbolName = "";
-let compareRequestId = 0;
 
 let isDragging = false;
 let dragStartX = 0;
@@ -1027,14 +1026,17 @@ function calculateVolumeProfile(visibleIndices, minPrice, maxPrice){
     const volume = series[sIdx]?.volume;
     
     if(vwap != null && volume != null && volume > 0){
-      // VWAPがどの価格帯に属するか計算
-      const binIndex = Math.floor((maxPrice - vwap) / binSize);;
+      // VWAPを四捨五入
+      const roundedVWAP = Math.round(vwap);
+      
+      // 四捨五入したVWAPがどの価格帯に属するか計算
+      const binIndex = Math.floor((maxPrice - roundedVWAP) / binSize);
       
       // 境界値の処理
       let clampedIndex = binIndex;
-      if(vwap >= maxPrice){
-        clampedIndex = 0;␊
-      } else if(vwap <= minPrice){
+      if(roundedVWAP >= maxPrice){
+        clampedIndex = 0;
+      } else if(roundedVWAP <= minPrice){
         clampedIndex = bins - 1;
       } else {
         clampedIndex = Math.max(0, Math.min(bins - 1, binIndex));
@@ -1310,7 +1312,6 @@ function updateTimeframeSeries(){
 async function loadCompareSymbol(){
   const compareSel = document.getElementById('compareSymbolSelect');
   const code = compareSel?.value;
-  const requestId = ++compareRequestId;
   
   if(!code) {
     compareDailySeries = [];
@@ -1325,9 +1326,6 @@ async function loadCompareSymbol(){
   compareSymbolCode = code;
   
   compareDailySeries = await loadSymbolCSV(code);
-  if(requestId !== compareRequestId || !compareEnabled){
-    return;
-  }
   updateTimeframeSeries();
 }
 
@@ -1461,9 +1459,8 @@ if(showFinancialInfo){
 let minP = Infinity, maxP = -Infinity;
 let displaySeries = visibleCandles;
 let displayCompareSeries = [];
-  const canCompare = compareEnabled && compareSymbolCode && compareSeries.length > 0;
   
-  if(canCompare){
+  if(compareEnabled && compareSymbolCode && compareSeries.length > 0){
     let mainFirstOpen = null;
     let compareFirstOpen = null;
     
@@ -1580,8 +1577,6 @@ let displayCompareSeries = [];
     return;
   }
 
-  const dataMinP = minP;
-  const dataMaxP = maxP;
   const range = (maxP - minP) || 1;
   minP -= range * 0.05; 
   maxP += range * 0.05;
@@ -1590,11 +1585,11 @@ let displayCompareSeries = [];
   const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleCandles.length);
   const getY = (val) => pad.t + chartH - (val - minP) * scaleY;
 
-  const formatPrice = (price, rangeValue) => {
-    if(rangeValue <= 1) return price.toFixed(3);
-    if(rangeValue <= 5) return price.toFixed(2);
-    if(rangeValue <= 20) return price.toFixed(1);
-    return Math.round(price).toLocaleString();
+  const roundPrice = (price) => {
+    if(price < 1000) return Math.round(price / 10) * 10;
+    if(price < 3000) return Math.round(price / 50) * 50;
+    if(price < 5000) return Math.round(price / 100) * 100;
+    return Math.round(price / 500) * 500;
   };
 
   ctx.strokeStyle = '#eee'; 
@@ -1603,13 +1598,14 @@ let displayCompareSeries = [];
   for(let i = 0; i <= gridSteps; i++){
     const y = pad.t + (chartH * i / gridSteps);
     const rawPrice = maxP - (maxP - minP) * (i / gridSteps);
+    const price = roundPrice(rawPrice);
     ctx.beginPath(); 
     ctx.moveTo(pad.l, y); 
     ctx.lineTo(w - pad.r, y); 
     ctx.stroke();
     ctx.fillStyle = '#666'; 
     ctx.textAlign = 'left';
-    ctx.fillText(formatPrice(rawPrice, maxP - minP), w - pad.r + 5, y + 4);
+    ctx.fillText(price.toLocaleString(), w - pad.r + 5, y + 4);
   }
 
   mainCanvas.candlePositions = visibleCandles.map((c, i) => ({
@@ -1722,8 +1718,8 @@ let displayCompareSeries = [];
   });
   
  // 価格帯別出来高の描画（背景レイヤー）
-if(volumeProfileEnabled && !canCompare){␊
-  const volumeProfile = calculateVolumeProfile(visibleIndices, dataMinP, dataMaxP);
+if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
+  const volumeProfile = calculateVolumeProfile(visibleIndices, minP, maxP);
   const maxVolume = Math.max(...volumeProfile.profile);
   
   if(maxVolume > 0){
@@ -2538,28 +2534,21 @@ function setupEventListeners(){
   // 銘柄選択のイベント
   document.getElementById('symbolSelect')?.addEventListener('change', () => applySymbol());
 
-  const getFirstSelectableIndex = (sel) => {
-    if(!sel?.options?.length) return 0;
-    const firstValidIndex = Array.from(sel.options).findIndex((opt) => opt.value !== "");
-    return firstValidIndex === -1 ? 0 : firstValidIndex;
-  };
-
   document.getElementById('symbolSelect')?.addEventListener('keydown', (e) => {
     const sel = e.target;
     const currentIndex = sel.selectedIndex;
     const maxIndex = sel.options.length - 1;
-    const firstIndex = getFirstSelectableIndex(sel);
     let newIndex = currentIndex;
 
     if(e.key === 'ArrowRight'){
       e.preventDefault();
-      newIndex = currentIndex >= maxIndex ? firstIndex : Math.min(currentIndex + 1, maxIndex);
+      newIndex = Math.min(currentIndex + 1, maxIndex);
     }else if(e.key === 'ArrowLeft'){
       e.preventDefault();
       newIndex = Math.max(currentIndex - 1, 0);
     }else if(e.key === 'ArrowDown'){
       e.preventDefault();
-      newIndex = currentIndex + 10 > maxIndex ? firstIndex : Math.min(currentIndex + 10, maxIndex);
+      newIndex = Math.min(currentIndex + 10, maxIndex);
     }else if(e.key === 'ArrowUp'){
       e.preventDefault();
       newIndex = Math.max(currentIndex - 10, 0);
@@ -2568,33 +2557,6 @@ function setupEventListeners(){
     if(newIndex !== currentIndex){
       sel.selectedIndex = newIndex;
       applySymbol();
-    }
-  });
-
-  document.getElementById('compareSymbolSelect')?.addEventListener('keydown', (e) => {
-    const sel = e.target;
-    const currentIndex = sel.selectedIndex;
-    const maxIndex = sel.options.length - 1;
-    const firstIndex = getFirstSelectableIndex(sel);
-    let newIndex = currentIndex;
-
-    if(e.key === 'ArrowRight'){
-      e.preventDefault();
-      newIndex = currentIndex >= maxIndex ? firstIndex : Math.min(currentIndex + 1, maxIndex);
-    }else if(e.key === 'ArrowLeft'){
-      e.preventDefault();
-      newIndex = Math.max(currentIndex - 1, 0);
-    }else if(e.key === 'ArrowDown'){
-      e.preventDefault();
-      newIndex = currentIndex + 10 > maxIndex ? firstIndex : Math.min(currentIndex + 10, maxIndex);
-    }else if(e.key === 'ArrowUp'){
-      e.preventDefault();
-      newIndex = Math.max(currentIndex - 10, 0);
-    }
-
-    if(newIndex !== currentIndex){
-      sel.selectedIndex = newIndex;
-      sel.dispatchEvent(new Event('change'));
     }
   });
 
@@ -2632,16 +2594,9 @@ function setupEventListeners(){
     compareEnabled = e.target.checked;
     if(compareEnabled){
       await loadCompareSymbol();
-    }else{
-      compareRequestId++;
-      compareSymbolCode = "";
-      compareSeries = [];
-      compareDailySeries = [];
-      displayCompareSeries = [];
     }
     drawChart();
   });
-
 
   document.getElementById('compareSymbolSelect')?.addEventListener('change', async (e) => {
     if(compareEnabled){
@@ -2743,16 +2698,14 @@ function setupEventListeners(){
     
     const currentIndex = symbolSelect.selectedIndex;
     const maxIndex = symbolSelect.options.length - 1;
-    const firstIndex = Array.from(symbolSelect.options).findIndex((opt) => opt.value !== "");
-    const fallbackIndex = firstIndex === -1 ? 0 : firstIndex;
     let newIndex = currentIndex;
 
     if(e.key === 'ArrowRight'){
-      newIndex = currentIndex >= maxIndex ? fallbackIndex : Math.min(currentIndex + 1, maxIndex);
+      newIndex = Math.min(currentIndex + 1, maxIndex);
     }else if(e.key === 'ArrowLeft'){
       newIndex = Math.max(currentIndex - 1, 0);
     }else if(e.key === 'ArrowDown'){
-      newIndex = currentIndex + 10 > maxIndex ? fallbackIndex : Math.min(currentIndex + 10, maxIndex);
+      newIndex = Math.min(currentIndex + 10, maxIndex);
     }else if(e.key === 'ArrowUp'){
       newIndex = Math.max(currentIndex - 10, 0);
     }
@@ -2799,49 +2752,3 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
