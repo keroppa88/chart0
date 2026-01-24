@@ -115,6 +115,13 @@
       <div class="param-group"><label>Sig</label><input type="number" id="macdSignal" value="9"></div>
       <div class="param-group"><label>ATR%</label><input type="number" id="atrPeriod" value="20"></div>
       <div class="param-group"><label>ADX</label><input type="number" id="adxPeriod" value="14"></div>
+      <div class="param-group">
+        <label style="display:flex; align-items:center; gap:4px;">
+          <input type="checkbox" id="dochianCheck">
+          <span>Dochian</span>
+        </label>
+        <input type="number" id="dochianPeriod" value="20">
+      </div>
     </div>
   </div>
 
@@ -316,7 +323,9 @@ let params = {
   stochK: 14, stochD: 3,
   macdShort: 12, macdLong: 26, macdSignal: 9,
   atr: 20,
-  adx: 14
+  adx: 14,
+  dochian: 20,
+  dochianEnabled: false
 };
 
 let mainCanvas, mainCtx;
@@ -337,7 +346,8 @@ let indicators = {
   macd: { macd: [], signal: [], hist: [] },
   atr: [],
   adx: { adx: [], plusDI: [], minusDI: [] },
-  vwap: [] // 追加
+  vwap: [], // 追加
+  dochian: { high: [], low: [], mid: [] }
 };
 
 let backBuffers = { main: null, volume: null, macd: null, stoch: null, rsi: null, atr: null, adx: null };
@@ -884,6 +894,29 @@ function calculateATR(data, period){
   return result;
 }
 
+function calculateDochian(data, period){
+  const high = new Array(data.length).fill(null);
+  const low = new Array(data.length).fill(null);
+  const mid = new Array(data.length).fill(null);
+  if(period <= 0) return { high, low, mid };
+
+  for(let i = period - 1; i < data.length; i++){
+    let highest = -Infinity;
+    let lowest = Infinity;
+    for(let j = 0; j < period; j++){
+      const candle = data[i - j];
+      if(candle.high != null) highest = Math.max(highest, candle.high);
+      if(candle.low != null) lowest = Math.min(lowest, candle.low);
+    }
+    if(highest !== -Infinity && lowest !== Infinity){
+      high[i] = highest;
+      low[i] = lowest;
+      mid[i] = (highest + lowest) / 2;
+    }
+  }
+  return { high, low, mid };
+}
+
 function calculateADX(data, period){
   const adxLine = new Array(data.length).fill(null);
   const plusDI = new Array(data.length).fill(null);
@@ -1090,6 +1123,7 @@ function recomputeIndicators(){
     indicators.atr = [];
     indicators.adx = { adx: [], plusDI: [], minusDI: [] };
     indicators.vwap = []; // 追加
+    indicators.dochian = { high: [], low: [], mid: [] };
     return;
   }
   indicators.ma1 = calculateMA(series, params.ma1);
@@ -1100,6 +1134,7 @@ function recomputeIndicators(){
   indicators.atr = calculateATR(series, params.atr);
   indicators.adx = calculateADX(series, params.adx);
   indicators.vwap = calculateVWAP(series, params.vwap);
+  indicators.dochian = calculateDochian(series, params.dochian);
 }
 
 function calcStatsForVisibleWindow(){
@@ -1639,6 +1674,16 @@ let displayCompareSeries = [];
           const vwap = indicators.vwap[sIdx];
           if(vwap != null){ minP = Math.min(minP, vwap); maxP = Math.max(maxP, vwap); }
         }
+
+        if(params.dochianEnabled && params.dochian > 0){
+          const dochian = indicators.dochian;
+          const dHigh = dochian.high[sIdx];
+          const dLow = dochian.low[sIdx];
+          const dMid = dochian.mid[sIdx];
+          if(dHigh != null){ minP = Math.min(minP, dHigh); maxP = Math.max(maxP, dHigh); }
+          if(dLow != null){ minP = Math.min(minP, dLow); maxP = Math.max(maxP, dLow); }
+          if(dMid != null){ minP = Math.min(minP, dMid); maxP = Math.max(maxP, dMid); }
+        }
       }
     });
   }
@@ -1892,9 +1937,9 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
     ctx.strokeRect(x - bodyW / 2, top, bodyW, height);
   });
 
-  const drawLine = (arr, color) => {
+  const drawLine = (arr, color, width = 1.5) => {
     ctx.strokeStyle = color; 
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = width;
     ctx.beginPath();
     let m = false;
     visibleIndices.forEach((sIdx, i) => {
@@ -1918,6 +1963,12 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
     // VWAP描画追加
     if(params.vwap > 0){
       drawLine(indicators.vwap, '#9c27b0');
+    }
+
+    if(params.dochianEnabled && params.dochian > 0){
+      drawLine(indicators.dochian.high, '#f44336', 1);
+      drawLine(indicators.dochian.low, '#f44336', 1);
+      drawLine(indicators.dochian.mid, '#f44336', 1);
     }
   }
 }
@@ -2717,7 +2768,7 @@ function setupEventListeners(){
     }
   });
 
-  const inputs = document.querySelectorAll('.param-group input');
+  const inputs = document.querySelectorAll('.param-group input[type="number"]');
   inputs.forEach(inp => {
     inp.addEventListener('change', e => {
       const id = e.target.id;
@@ -2735,10 +2786,17 @@ function setupEventListeners(){
       if(id === 'macdSignal') params.macdSignal = val;
       if(id === 'atrPeriod') params.atr = val;
       if(id === 'adxPeriod') params.adx = val;
+      if(id === 'dochianPeriod') params.dochian = val;
 
       recomputeIndicators();
       drawChart();
     });
+  });
+
+  const dochianCheck = document.getElementById('dochianCheck');
+  dochianCheck?.addEventListener('change', (e) => {
+    params.dochianEnabled = e.target.checked;
+    drawChart();
   });
 
   const canvases = [mainCanvas, volumeCanvas, macdCanvas, stochCanvas, rsiCanvas, atrCanvas, adxCanvas];
@@ -2830,6 +2888,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
