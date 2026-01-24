@@ -127,6 +127,14 @@
         <input type="number" id="dochianPeriod" value="20">
       </div>
       <div class="param-group">
+        <div class="param-group">
+        <label style="display:flex; align-items:center; gap:4px;">
+          <input type="checkbox" id="dochianCheck">
+          <span>Dochian</span>
+        </label>
+        <input type="number" id="dochianPeriod" value="20">
+      </div>
+      <div class="param-group">
         <label style="display:flex; align-items:center; gap:4px;">
           <input type="checkbox" id="keltnerCheck">
           <span>Keltner</span>
@@ -934,6 +942,39 @@ function calculateATR(data, period){
     }
   }
   
+  return result;
+}
+
+function calculateATREMA(data, period){
+  const trValues = new Array(data.length).fill(null);
+  if(data.length < 2) return trValues;
+
+  for(let i = 1; i < data.length; i++){
+    const curr = data[i];
+    const prev = data[i - 1];
+
+    const tr1 = curr.high - curr.low;
+    const tr2 = Math.abs(curr.high - prev.close);
+    const tr3 = Math.abs(curr.low - prev.close);
+    trValues[i] = Math.max(tr1, tr2, tr3);
+  }
+
+  return calculateEMAValues(trValues, period);
+}
+
+function calculateKeltner(data, period, multiplier){
+  const middle = calculateEMA(data, period);
+  const atr = calculateATREMA(data, period);
+  const upper = new Array(data.length).fill(null);
+  const lower = new Array(data.length).fill(null);
+
+  for(let i = 0; i < data.length; i++){
+    if(middle[i] != null && atr[i] != null){
+      upper[i] = middle[i] + (atr[i] * multiplier);
+      lower[i] = middle[i] - (atr[i] * multiplier);
+    }
+  }
+
   return result;
 }
 
@@ -3001,6 +3042,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
