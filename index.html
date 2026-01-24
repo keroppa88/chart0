@@ -129,15 +129,15 @@
     <!-- グループ2: 比較、価格帯別出来高、VWAP、日付ライン -->
     <div class="legend-group">
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="compareCheck">
+        <input type="checkbox" id="financialInfoCheck" checked>
         <span>情報</span>
       </label>
 
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="financialInfoCheck" checked>
+        <input type="checkbox" id="compareCheck">
         <span>比較</span>
       </label>
-     
+       
       <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
         <option value="">選択してください</option>
       </select>
@@ -2752,6 +2752,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
