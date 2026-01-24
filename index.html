@@ -131,6 +131,12 @@
         <input type="checkbox" id="compareCheck">
         <span>比較</span>
       </label>
+
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+ 　　　　 <input type="checkbox" id="financialInfoCheck" checked>
+　　　　  <span>財務情報</span>
+      </label>
+     
       <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
         <option value="">選択してください</option>
       </select>
@@ -363,6 +369,7 @@ let rightSpaceEnabled = false;
 let dateLineEnabled = false;
 let vwapEnabled = false; // 追加
 let volumeProfileEnabled = false; // 追加（将来用）
+let showFinancialInfo = true; // 追加
   
 /* =========================
    Data Version
@@ -997,7 +1004,7 @@ function calculateVolumeProfile(visibleIndices, minPrice, maxPrice){
   if(minPrice >= maxPrice || !visibleIndices || visibleIndices.length === 0){
     return { bins, profile, minPrice, maxPrice };
   }
-  
+
   const priceRange = maxPrice - minPrice;
   const binSize = priceRange / bins;
   
@@ -1032,6 +1039,32 @@ function calculateVolumeProfile(visibleIndices, minPrice, maxPrice){
   return { bins, profile, minPrice, maxPrice };
 }
 
+async function loadFinancialData(code){
+  try{
+    const res = await fetch(`./financedata/${code}.csv?v=${DATA_VER}`);
+    if(!res.ok) return null;
+    
+    const text = await res.text();
+    const lines = text.trim().split(/\r?\n/);
+    if(lines.length < 2) return null;
+    
+    const lastLine = lines[lines.length - 1];
+    const cols = lastLine.split(',').map(s => s.trim());
+    
+    const profit = toNum(cols[3]);
+    const eps = toNum(cols[4]);
+    
+    if(Number.isNaN(profit) || Number.isNaN(eps) || eps === 0) return null;
+    
+    const shares = profit / eps;
+    
+    return { eps, shares };
+  }catch(e){
+    return null;
+  }
+}
+
+  
 function recomputeIndicators(){
   if(!series || series.length === 0){
     indicators.ma1 = []; 
@@ -1217,6 +1250,8 @@ async function applySymbol(){
   
   dailySeries = await loadSymbolCSV(code);
   updateTimeframeSeries();
+
+  window.currentFinancialData = await loadFinancialData(code);
   
   offsetX = 0;
 
@@ -1359,17 +1394,47 @@ function drawMain(visibleCandles, visibleIndices){
       ctx.fillStyle = '#acacac';
       ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillText(`${timeframeLabel}騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
-      
-      const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
-      ctx.fillText(line2, pad.l + 5, pad.t + 45);
-      
-      const line3 = `陽線率${fmtPct(bullRate)}（陽線時平均${fmtAvg(bullAvg)}、陰線時平均${fmtAvg(bearAvg)}）`;
-      ctx.fillText(line3, pad.l + 5, pad.t + 65);
-    }
-    
-    ctx.restore();
-  }
 
+      if(showFinancialInfo){
+  const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
+  ctx.fillText(line2, pad.l + 5, pad.t + 45);
+  
+  const line3 = `陽線率${fmtPct(bullRate)}（陽線時平均${fmtAvg(bullAvg)}、陰線時平均${fmtAvg(bearAvg)}）`;
+  ctx.fillText(line3, pad.l + 5, pad.t + 65);
+  
+  let line4 = "";
+  if(window.currentFinancialData && dailySeries && dailySeries.length > 0){
+    const { eps, shares } = window.currentFinancialData;
+    const latestPrice = dailySeries[dailySeries.length - 1].close;
+    
+    if(latestPrice && eps && shares){
+      const per = latestPrice / eps;
+      const perText = `PER${per.toFixed(1)}倍`;
+      
+      const marketCap = shares * latestPrice;
+      let marketCapText = "";
+      
+      const oku = Math.floor(marketCap / 100000000);
+      const chou = Math.floor(oku / 10000);
+      const remainOku = oku % 10000;
+      
+      if(chou > 0){
+        marketCapText = `時価総額${chou}兆${remainOku}億円`;
+      }else{
+        marketCapText = `時価総額${oku}億円`;
+      }
+      
+      line4 = `${perText} ${marketCapText}`;
+    }
+  }
+  
+  if(line4){
+    ctx.fillText(line4, pad.l + 5, pad.t + 85);
+  }
+}
+ctx.restore();
+}
+    
   let minP = Infinity, maxP = -Infinity;
 
   let displaySeries = visibleCandles;
@@ -2505,6 +2570,11 @@ function setupEventListeners(){
     drawChart();
   });
 
+  document.getElementById('financialInfoCheck')?.addEventListener('change', (e) => {
+    showFinancialInfo = e.target.checked;
+    drawChart();
+  });
+
   document.getElementById('compareCheck')?.addEventListener('change', async (e) => {
     compareEnabled = e.target.checked;
     if(compareEnabled){
@@ -2666,6 +2736,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
