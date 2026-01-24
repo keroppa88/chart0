@@ -1829,15 +1829,9 @@ let displayCompareSeries = [];
     return;
   }
 
-  const rawMinP = minP;
-  const rawMaxP = maxP;
   const range = (maxP - minP) || 1;
   minP -= range * 0.05; 
   maxP += range * 0.05;
-  const scaleY = chartH / (maxP - minP);
-
-  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleCandles.length);
-  const getY = (val) => pad.t + chartH - (val - minP) * scaleY;
 
   const roundPrice = (price) => {
     if(price < 1000) return Math.round(price / 10) * 10;
@@ -1846,12 +1840,19 @@ let displayCompareSeries = [];
     return Math.round(price / 500) * 500;
   };
 
+  const axisMin = roundPrice(minP);
+  const axisMax = roundPrice(maxP);
+  const scaleY = chartH / (maxP - minP);
+
+  const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleCandles.length);
+  const getY = (val) => pad.t + chartH - (val - minP) * scaleY;
+
   ctx.strokeStyle = '#eee'; 
   ctx.lineWidth = 1;
   const gridSteps = 5;
   for(let i = 0; i <= gridSteps; i++){
     const y = pad.t + (chartH * i / gridSteps);
-    const rawPrice = maxP - (maxP - minP) * (i / gridSteps);
+    const rawPrice = axisMax - (axisMax - axisMin) * (i / gridSteps);
     const price = roundPrice(rawPrice);
     ctx.beginPath(); 
     ctx.moveTo(pad.l, y); 
@@ -1973,23 +1974,23 @@ let displayCompareSeries = [];
   
  // 価格帯別出来高の描画（背景レイヤー）
 if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
-  const volumeProfile = calculateVolumeProfile(visibleIndices, rawMinP, rawMaxP);
+  const volumeProfile = calculateVolumeProfile(visibleIndices, axisMin, axisMax);
   const maxVolume = Math.max(...volumeProfile.profile);
-  
+                                                                  
   if(maxVolume > 0){
     const maxBarWidth = chartW * 0.5; // チャート幅の50%が最大
     
     ctx.save();
     ctx.fillStyle = '#E0EBEB';
     
-    for(let i = 0; i < volumeProfile.bins; i++){
-      const vol = volumeProfile.profile[i];
-      if(vol === 0) continue;
-      
-      // 価格帯の上端と下端を計算
-      const priceRangePerBin = (maxP - minP) / volumeProfile.bins;
-      const priceBottom = minP + (i * priceRangePerBin);
-      const priceTop = minP + ((i + 1) * priceRangePerBin);
+    for(let i = 0; i < volumeProfile.bins; i++){␊
+      const vol = volumeProfile.profile[i];␊
+      if(vol === 0) continue;␊
+      ␊
+      // 価格帯の上端と下端を計算␊
+      const priceRangePerBin = (axisMax - axisMin) / volumeProfile.bins;
+      const priceBottom = axisMin + (i * priceRangePerBin);
+      const priceTop = axisMin + ((i + 1) * priceRangePerBin);
       
       // Y座標に変換（getY関数を使用）
       const yTop = getY(priceTop);
@@ -3045,6 +3046,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
