@@ -1180,6 +1180,69 @@ function calcStatsForVisibleWindow(){
   return { winRate, upAvg, downAvg, bullRate, totalReturn, bullAvg, bearAvg };
 }
 
+function calcCorrelationForVisibleWindow(){
+  if(!series || series.length === 0 || !compareSeries || compareSeries.length === 0){
+    return null;
+  }
+
+  const { visibleIndices } = getVisibleWindow();
+  const idxs = visibleIndices.filter(i => i != null);
+  if(idxs.length === 0){
+    return null;
+  }
+
+  const compareSeriesDateMap = new Map();
+  compareSeries.forEach((item) => {
+    if(item && item.date){
+      compareSeriesDateMap.set(item.date, item);
+    }
+  });
+
+  const mainValues = [];
+  const compareValues = [];
+
+  idxs.forEach((i) => {
+    const mainItem = series[i];
+    if(!mainItem || !mainItem.date) return;
+    const compareItem = compareSeriesDateMap.get(mainItem.date);
+    if(!compareItem) return;
+
+    const mainValue = mainItem.close != null ? mainItem.close : mainItem.open;
+    const compareValue = compareItem.close != null ? compareItem.close : compareItem.open;
+
+    if(mainValue == null || compareValue == null) return;
+    mainValues.push(mainValue);
+    compareValues.push(compareValue);
+  });
+
+  if(mainValues.length < 2){
+    return null;
+  }
+
+  const n = mainValues.length;
+  const meanMain = mainValues.reduce((sum, v) => sum + v, 0) / n;
+  const meanCompare = compareValues.reduce((sum, v) => sum + v, 0) / n;
+
+  let sumCov = 0;
+  let sumMainSq = 0;
+  let sumCompareSq = 0;
+
+  for(let i = 0; i < n; i++){
+    const mainDiff = mainValues[i] - meanMain;
+    const compareDiff = compareValues[i] - meanCompare;
+    sumCov += mainDiff * compareDiff;
+    sumMainSq += mainDiff * mainDiff;
+    sumCompareSq += compareDiff * compareDiff;
+  }
+
+  if(sumMainSq === 0 || sumCompareSq === 0){
+    return null;
+  }
+
+  const corr = sumCov / Math.sqrt(sumMainSq * sumCompareSq);
+  return Number(corr.toFixed(2));
+}
+
 function clampView(){
   if(!series || series.length === 0){
     displayCount = Math.max(10, displayCount);
@@ -1395,6 +1458,12 @@ function drawMain(visibleCandles, visibleIndices){
       
       ctx.fillStyle = 'rgba(172, 172, 172, 0.4)';
       ctx.fillText(compareSymbolName, pad.l + 5 + mainWidth + spaceWidth, pad.t + 5);
+
+      const correlation = calcCorrelationForVisibleWindow();
+      const correlationText = correlation == null ? '相関係数-' : `相関係数${correlation.toFixed(2)}`;
+      ctx.fillStyle = '#acacac';
+      ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillText(correlationText, pad.l + 5, pad.t + 45);
     }else{
       const { winRate, upAvg, downAvg, bullRate, totalReturn, bullAvg, bearAvg } = calcStatsForVisibleWindow();
       
@@ -2761,6 +2830,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
