@@ -1027,17 +1027,14 @@ function calculateVolumeProfile(visibleIndices, minPrice, maxPrice){
     const volume = series[sIdx]?.volume;
     
     if(vwap != null && volume != null && volume > 0){
-      // VWAPを四捨五入
-      const roundedVWAP = Math.round(vwap);
-      
-      // 四捨五入したVWAPがどの価格帯に属するか計算
-      const binIndex = Math.floor((maxPrice - roundedVWAP) / binSize);
+      // VWAPがどの価格帯に属するか計算
+      const binIndex = Math.floor((maxPrice - vwap) / binSize);;
       
       // 境界値の処理
       let clampedIndex = binIndex;
-      if(roundedVWAP >= maxPrice){
-        clampedIndex = 0;
-      } else if(roundedVWAP <= minPrice){
+      if(vwap >= maxPrice){
+        clampedIndex = 0;␊
+      } else if(vwap <= minPrice){
         clampedIndex = bins - 1;
       } else {
         clampedIndex = Math.max(0, Math.min(bins - 1, binIndex));
@@ -1583,6 +1580,8 @@ let displayCompareSeries = [];
     return;
   }
 
+  const dataMinP = minP;
+  const dataMaxP = maxP;
   const range = (maxP - minP) || 1;
   minP -= range * 0.05; 
   maxP += range * 0.05;
@@ -1591,11 +1590,11 @@ let displayCompareSeries = [];
   const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleCandles.length);
   const getY = (val) => pad.t + chartH - (val - minP) * scaleY;
 
-  const roundPrice = (price) => {
-    if(price < 1000) return Math.round(price / 10) * 10;
-    if(price < 3000) return Math.round(price / 50) * 50;
-    if(price < 5000) return Math.round(price / 100) * 100;
-    return Math.round(price / 500) * 500;
+  const formatPrice = (price, rangeValue) => {
+    if(rangeValue <= 1) return price.toFixed(3);
+    if(rangeValue <= 5) return price.toFixed(2);
+    if(rangeValue <= 20) return price.toFixed(1);
+    return Math.round(price).toLocaleString();
   };
 
   ctx.strokeStyle = '#eee'; 
@@ -1604,14 +1603,13 @@ let displayCompareSeries = [];
   for(let i = 0; i <= gridSteps; i++){
     const y = pad.t + (chartH * i / gridSteps);
     const rawPrice = maxP - (maxP - minP) * (i / gridSteps);
-    const price = roundPrice(rawPrice);
     ctx.beginPath(); 
     ctx.moveTo(pad.l, y); 
     ctx.lineTo(w - pad.r, y); 
     ctx.stroke();
     ctx.fillStyle = '#666'; 
     ctx.textAlign = 'left';
-    ctx.fillText(price.toLocaleString(), w - pad.r + 5, y + 4);
+    ctx.fillText(formatPrice(rawPrice, maxP - minP), w - pad.r + 5, y + 4);
   }
 
   mainCanvas.candlePositions = visibleCandles.map((c, i) => ({
@@ -1724,8 +1722,8 @@ let displayCompareSeries = [];
   });
   
  // 価格帯別出来高の描画（背景レイヤー）
-if(volumeProfileEnabled && !canCompare){
-  const volumeProfile = calculateVolumeProfile(visibleIndices, minP, maxP);
+if(volumeProfileEnabled && !canCompare){␊
+  const volumeProfile = calculateVolumeProfile(visibleIndices, dataMinP, dataMaxP);
   const maxVolume = Math.max(...volumeProfile.profile);
   
   if(maxVolume > 0){
@@ -2801,6 +2799,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
