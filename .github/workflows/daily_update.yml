@@ -16,7 +16,7 @@ jobs:
       
       # 株価データ更新
       - name: Update Stock Data
-        run: node update_daily.js
+        run: node aaget.js
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
       
