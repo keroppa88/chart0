@@ -753,6 +753,9 @@ async function autoLoadChartList(){
    Technical Indicators
 ========================= */
 function calculateMA(data, period){
+  if(!period || period <= 0){
+    return new Array(data.length).fill(null);
+  }
   const result = new Array(data.length).fill(null);
   for(let i = period - 1; i < data.length; i++){
     let sum = 0;
@@ -1664,10 +1667,14 @@ let displayCompareSeries = [];
       if(c.close != null){ minP = Math.min(minP, c.close); maxP = Math.max(maxP, c.close); }
 
       if(sIdx != null){
-        const m1 = indicators.ma1[sIdx];
-        const m2 = indicators.ma2[sIdx];
-        if(m1 != null){ minP = Math.min(minP, m1); maxP = Math.max(maxP, m1); }
-        if(m2 != null){ minP = Math.min(minP, m2); maxP = Math.max(maxP, m2); }
+        if(params.ma1 > 0){
+          const m1 = indicators.ma1[sIdx];
+          if(m1 != null){ minP = Math.min(minP, m1); maxP = Math.max(maxP, m1); }
+        }
+        if(params.ma2 > 0){
+          const m2 = indicators.ma2[sIdx];
+          if(m2 != null){ minP = Math.min(minP, m2); maxP = Math.max(maxP, m2); }
+        }
         
         // VWAP追加
         if(params.vwap > 0){
@@ -1957,8 +1964,12 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
   };
   
   if(!compareEnabled || !compareSymbolCode){
-    drawLine(indicators.ma1, '#ff9800');
-    drawLine(indicators.ma2, '#2196f3');
+    if(params.ma1 > 0){
+      drawLine(indicators.ma1, '#ff9800');
+    }
+    if(params.ma2 > 0){
+      drawLine(indicators.ma2, '#2196f3');
+    }
     
     // VWAP描画追加
     if(params.vwap > 0){
@@ -2405,7 +2416,11 @@ function handleTooltip(e, canvas){
   if(c.volume != null){
     html += `出来高:${fmt(c.volume)}<br>`;
   }
-  html += `<span style="color:#ff9800">MA${params.ma1}:${fmt(ma1)}</span> <span style="color:#2196f3">MA${params.ma2}:${fmt(ma2)}</span><br>`;
+  if(params.ma1 > 0 || params.ma2 > 0){
+    const ma1Label = params.ma1 > 0 ? `<span style="color:#ff9800">MA${params.ma1}:${fmt(ma1)}</span>` : '';
+    const ma2Label = params.ma2 > 0 ? `<span style="color:#2196f3">MA${params.ma2}:${fmt(ma2)}</span>` : '';
+    html += `${ma1Label}${ma1Label && ma2Label ? ' ' : ''}${ma2Label}<br>`;
+  }
   html += `<span style="color:#9c27b0">VWAP:${fmt(vwap)}</span><br>`; // 追加
   html += `<span style="color:#9c27b0">RSI:${fmt(rsi)}</span><br>`;
   html += `<span style="color:#00bcd4">K:${fmt(stK)}</span> <span style="color:#ff5722">D:${fmt(stD)}</span><br>`;
@@ -2888,6 +2903,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
