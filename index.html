@@ -2598,6 +2598,11 @@ function setupEventListeners(){
     compareEnabled = e.target.checked;
     if(compareEnabled){
       await loadCompareSymbol();
+    }else{
+      compareSymbolCode = "";
+      compareSymbolName = "";
+      compareSeries = [];
+      compareDailySeries = [];
     }
     drawChart();
   });
@@ -2756,5 +2761,6 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
