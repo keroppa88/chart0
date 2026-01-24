@@ -119,11 +119,19 @@
       <div class="param-group"><label>ATR%</label><input type="number" id="atrPeriod" value="20"></div>
       <div class="param-group"><label>ADX</label><input type="number" id="adxPeriod" value="14"></div>
       <div class="param-group">
+        <div class="param-group">
         <label style="display:flex; align-items:center; gap:4px;">
           <input type="checkbox" id="dochianCheck">
           <span>Dochian</span>
         </label>
         <input type="number" id="dochianPeriod" value="20">
+      </div>
+      <div class="param-group">
+        <label style="display:flex; align-items:center; gap:4px;">
+          <input type="checkbox" id="keltnerCheck">
+          <span>Keltner</span>
+        </label>
+        <input type="number" id="keltnerPeriod" value="20">
       </div>
     </div>
   </div>
@@ -328,7 +336,9 @@ let params = {
   atr: 20,
   adx: 14,
   dochian: 20,
-  dochianEnabled: false
+  dochianEnabled: false,
+  keltner: 20,
+  keltnerEnabled: false
 };
 
 let mainCanvas, mainCtx;
@@ -350,7 +360,8 @@ let indicators = {
   atr: [],
   adx: { adx: [], plusDI: [], minusDI: [] },
   vwap: [], // 追加
-  dochian: { high: [], low: [], mid: [] }
+  dochian: { high: [], low: [], mid: [] },
+  keltner: { upper: [], middle: [], lower: [] }
 };
 
 let backBuffers = { main: null, volume: null, macd: null, stoch: null, rsi: null, atr: null, adx: null };
@@ -768,6 +779,32 @@ function calculateMA(data, period){
   return result;
 }
 
+function calculateEMAValues(values, period){
+  const result = new Array(values.length).fill(null);
+  if(!period || period <= 0){
+    return result;
+  }
+  const k = 2 / (period + 1);
+  let ema = null;
+
+  for(let i = 0; i < values.length; i++){
+    const val = values[i];
+    if(val == null) continue;
+    if(ema == null){
+      ema = val;
+    }else{
+      ema = (val - ema) * k + ema;
+    }
+    result[i] = ema;
+  }
+  return result;
+}
+
+function calculateEMA(data, period){
+  const values = data.map(c => c?.close ?? null);
+  return calculateEMAValues(values, period);
+}
+
 function calculateRSI(data, period){
   const result = new Array(data.length).fill(null);
   if(data.length <= period) return result;
@@ -860,8 +897,8 @@ function calculateStochastic(data, kP, dP){
   return { k: kLine, d: dLine };
 }
 
-function calculateATR(data, period){
-  const result = new Array(data.length).fill(null);
+function calculateATR(data, period){␊
+  const result = new Array(data.length).fill(null);␊
   if(data.length < 2) return result;
 
   // TR%を計算
@@ -898,6 +935,42 @@ function calculateATR(data, period){
   }
   
   return result;
+}
+
+return result;
+}
+
+function calculateATREMA(data, period){
+  const trValues = new Array(data.length).fill(null);
+  if(data.length < 2) return trValues;
+
+  for(let i = 1; i < data.length; i++){
+    const curr = data[i];
+    const prev = data[i - 1];
+
+    const tr1 = curr.high - curr.low;
+    const tr2 = Math.abs(curr.high - prev.close);
+    const tr3 = Math.abs(curr.low - prev.close);
+    trValues[i] = Math.max(tr1, tr2, tr3);
+  }
+
+  return calculateEMAValues(trValues, period);
+}
+
+function calculateKeltner(data, period, multiplier){
+  const middle = calculateEMA(data, period);
+  const atr = calculateATREMA(data, period);
+  const upper = new Array(data.length).fill(null);
+  const lower = new Array(data.length).fill(null);
+
+  for(let i = 0; i < data.length; i++){
+    if(middle[i] != null && atr[i] != null){
+      upper[i] = middle[i] + (atr[i] * multiplier);
+      lower[i] = middle[i] - (atr[i] * multiplier);
+    }
+  }
+
+  return { upper, middle, lower };
 }
 
 function calculateDochian(data, period){
@@ -1130,6 +1203,7 @@ function recomputeIndicators(){
     indicators.adx = { adx: [], plusDI: [], minusDI: [] };
     indicators.vwap = []; // 追加
     indicators.dochian = { high: [], low: [], mid: [] };
+    indicators.keltner = { upper: [], middle: [], lower: [] };
     return;
   }
   indicators.ma1 = calculateMA(series, params.ma1);
@@ -1141,7 +1215,9 @@ function recomputeIndicators(){
   indicators.adx = calculateADX(series, params.adx);
   indicators.vwap = calculateVWAP(series, params.vwap);
   indicators.dochian = calculateDochian(series, params.dochian);
+  indicators.keltner = calculateKeltner(series, params.keltner, 2);
 }
+
 
 function calcStatsForVisibleWindow(){
   if(!series || series.length === 0){
@@ -1694,6 +1770,16 @@ let displayCompareSeries = [];
           if(dLow != null){ minP = Math.min(minP, dLow); maxP = Math.max(maxP, dLow); }
           if(dMid != null){ minP = Math.min(minP, dMid); maxP = Math.max(maxP, dMid); }
         }
+
+        if(params.keltnerEnabled && params.keltner > 0){
+          const keltner = indicators.keltner;
+          const kUpper = keltner.upper[sIdx];
+          const kLower = keltner.lower[sIdx];
+          const kMiddle = keltner.middle[sIdx];
+          if(kUpper != null){ minP = Math.min(minP, kUpper); maxP = Math.max(maxP, kUpper); }
+          if(kLower != null){ minP = Math.min(minP, kLower); maxP = Math.max(maxP, kLower); }
+          if(kMiddle != null){ minP = Math.min(minP, kMiddle); maxP = Math.max(maxP, kMiddle); }
+        }
       }
     });
   }
@@ -1983,6 +2069,12 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
       drawLine(indicators.dochian.high, '#000', 0.8);
       drawLine(indicators.dochian.low, '#000', 0.8);
       drawLine(indicators.dochian.mid, '#000', 0.8);
+    }
+
+    if(params.keltnerEnabled && params.keltner > 0){
+      drawLine(indicators.keltner.upper, '#ff0000', 0.8);
+      drawLine(indicators.keltner.lower, '#ff0000', 0.8);
+      drawLine(indicators.keltner.middle, '#ff0000', 0.8);
     }
   }
 }
@@ -2805,6 +2897,7 @@ function setupEventListeners(){
       if(id === 'atrPeriod') params.atr = val;
       if(id === 'adxPeriod') params.adx = val;
       if(id === 'dochianPeriod') params.dochian = val;
+      if(id === 'keltnerPeriod') params.keltner = val;
 
       recomputeIndicators();
       drawChart();
@@ -2814,6 +2907,12 @@ function setupEventListeners(){
   const dochianCheck = document.getElementById('dochianCheck');
   dochianCheck?.addEventListener('change', (e) => {
     params.dochianEnabled = e.target.checked;
+    drawChart();
+  });
+
+  const keltnerCheck = document.getElementById('keltnerCheck');
+  keltnerCheck?.addEventListener('change', (e) => {
+    params.keltnerEnabled = e.target.checked;
     drawChart();
   });
 
@@ -2906,6 +3005,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
