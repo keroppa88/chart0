@@ -1,104 +1,92 @@
-// financedataフォルダ内にあるCSVを把握して、それらの最新財務情報を取得して追記する。
+// financedata フォルダ配下に、銘柄別の財務CSVを全時系列で生成する。
+// ・J-Quants /v2/fins/summary を code 指定なしで一括取得
+// ・全銘柄・全期間を取得（pagination 回し切り）
+// ・Code(5桁末尾0) → 4桁に正規化
+// ・銘柄ごとに DiscDate 昇順で CSV を丸ごと書き直す
+// ・差分比較・追記判定はしない（常に再生成）
 
- const https = require('https');
- const fs = require('fs');
- const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
- const API_KEY = process.env.JQUANTS_API_KEY;
- const API_URL = "https://api.jquants.com/v2";
- const DATA_DIR = path.join(__dirname, 'financedata');
+const API_KEY = process.env.JQUANTS_API_KEY;
+const API_URL = "https://api.jquants.com/v2";
+const DATA_DIR = path.join(__dirname, "financedata");
 
- const today = new Date(Date.now() + (9 * 60 * 60 * 1000)).toISOString().split('T')[0];
+// 5桁末尾0 → 4桁正規化
+function normalizeCode(code) {
+  const c = String(code);
+  return (c.length === 5 && c.endsWith("0")) ? c.slice(0, 4) : c;
+}
 
- async function updateAllFinance() {
-     // 1. financedataフォルダ内の全CSVファイルを把握
--    const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('_finance.csv'));
-+    const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.csv'));
-     console.log(`${today} の財務情報更新を開始します（対象: ${files.length} 銘柄）...`);
-     
-     // 2. 各ファイルに対してループ
-     for (const file of files) {
--        // 3. ファイル名から銘柄コードを抽出（例: "7203.csv" → "7203"）
-+        // 3. ファイル名から銘柄コードを抽出（例: "7203.csv" → "7203"）
-         const code = path.basename(file, '.csv');
-         
-         // 4. その銘柄コードでAPI要求
-         await appendFinanceData(code);
-         await new Promise(resolve => setTimeout(resolve, 1000));
-     }
-     
-     console.log("\n✅ すべての銘柄の財務情報追記処理が完了しました。");
- }
+// 全財務データ一括取得
+async function fetchAllFinance() {
+  const all = [];
+  let paginationKey = null;
 
- async function appendFinanceData(code) {
-     // 5. 銘柄コードを使ってAPIリクエスト
-     let allData = [];
-     let paginationKey = "";
-     
-     try {
-         do {
-             const params = new URLSearchParams({ code });
-             if (paginationKey) params.set("pagination_key", paginationKey);
+  while (true) {
+    const params = new URLSearchParams();
+    if (paginationKey) params.set("pagination_key", paginationKey);
 
-             const response = await new Promise((resolve, reject) => {
-                 const options = {
-                     hostname: 'api.jquants.com',
-                     path: `/v2/fins/summary?${params.toString()}`,
-                     method: 'GET',
-                     headers: {
-                         'x-api-key': API_KEY
-                     }
-                 };
+    const res = await fetch(`${API_URL}/fins/summary?${params}`, {
+      headers: { "x-api-key": API_KEY },
+    });
 
-                 https.get(options, (res) => {
-                     let data = '';
-                     res.on('data', (chunk) => { data += chunk; });
-                     res.on('end', () => {
-                         if (res.statusCode === 200) {
-                             resolve(JSON.parse(data));
-                         } else {
-                             reject(new Error(`HTTP Error: ${res.statusCode}`));
-                         }
-                     });
-                 }).on('error', reject);
-             });
+    if (!res.ok) {
+      let body = "";
+      try { body = await res.text(); } catch (_) {}
+      throw new Error(`HTTP ${res.status} ${body}`);
+    }
 
-             allData = allData.concat(response.data || []);
-             paginationKey = response.pagination_key || "";
+    const json = await res.json();
+    all.push(...(json.data ?? []));
 
-         } while (paginationKey);
+    if (!json.pagination_key) break;
+    paginationKey = json.pagination_key;
+  }
 
-         if (allData.length > 0) {
-             // 最新データ（最後の1件）のみ取得
-             const latestData = allData[allData.length - 1];
--            const filePath = path.join(DATA_DIR, `${code}_finance.csv`);
-+            const filePath = path.join(DATA_DIR, `${code}.csv`);
-             
-             const currentContent = fs.readFileSync(filePath, 'utf-8');
-             
-             // 5桁で末尾が0の場合は削除
-             let localCode = latestData.Code || "";
-             if (localCode.length === 5 && localCode.endsWith('0')) {
-                 localCode = localCode.slice(0, 4);
-             }
-             
-             // 既に存在するか確認（開示日でチェック）
-             if (!currentContent.includes(latestData.DiscDate)) {
-                 const needsNewline = !currentContent.endsWith('\n');
-                 const newLine = (needsNewline ? '\n' : '') + 
-                     `${latestData.DiscDate},${latestData.DiscTime},${localCode},${latestData.NP || ''},${latestData.EPS || ''},${latestData.BPS || ''},${latestData.FDivAnn || ''}\n`;
-                 
-                 fs.appendFileSync(filePath, newLine);
-                 console.log(`✅ ${code}: 財務情報追記完了 (${latestData.DiscDate})`);
-             } else {
-                 console.log(`⚠️ ${code}: ${latestData.DiscDate} は既に存在します`);
-             }
-         } else {
-             console.log(`➖ ${code}: 新規財務データはありません`);
-         }
-     } catch (e) {
-         console.error(`❌ ${code} エラー:`, e.message);
-     }
- }
+  return all;
+}
 
- updateAllFinance();
+async function updateAllFinance() {
+  console.log("財務データ一括取得を開始します…");
+
+  const all = await fetchAllFinance();
+  console.log(`API取得完了: ${all.length} 件`);
+
+  // Code -> 行配列
+  const map = new Map();
+
+  for (const d of all) {
+    if (!d?.Code || !d?.DiscDate) continue;
+
+    const code = normalizeCode(d.Code);
+    if (!map.has(code)) map.set(code, []);
+    map.get(code).push(d);
+  }
+
+  let written = 0;
+
+  for (const [code, rows] of map) {
+    // 開示日昇順
+    rows.sort((a, b) => a.DiscDate.localeCompare(b.DiscDate));
+
+    const header = "DiscDate,DiscTime,Code,NP,EPS,BPS,FDivAnn\n";
+    const body = rows.map(d =>
+      `${d.DiscDate},${d.DiscTime ?? ""},${code},` +
+      `${d.NP ?? ""},${d.EPS ?? ""},${d.BPS ?? ""},${d.FDivAnn ?? ""}`
+    ).join("\n");
+
+    const csv = header + body + "\n";
+    const filePath = path.join(DATA_DIR, `${code}.csv`);
+
+    fs.writeFileSync(filePath, csv);
+    written++;
+  }
+
+  console.log(`✅ CSV生成完了: ${written} 銘柄`);
+}
+
+updateAllFinance().catch((e) => {
+  console.error("❌ 全体エラー:", e);
+  process.exitCode = 1;
+});
