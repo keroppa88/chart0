@@ -1718,7 +1718,7 @@ let displayCompareSeries = [];
   });
   
  // 価格帯別出来高の描画（背景レイヤー）
-if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
+if(volumeProfileEnabled && !compareEnabled){
   const volumeProfile = calculateVolumeProfile(visibleIndices, minP, maxP);
   const maxVolume = Math.max(...volumeProfile.profile);
   
@@ -2594,6 +2594,10 @@ function setupEventListeners(){
     compareEnabled = e.target.checked;
     if(compareEnabled){
       await loadCompareSymbol();
+    }else{
+      compareSymbolCode = "";
+      compareSeries = [];
+      displayCompareSeries = [];
     }
     drawChart();
   });
@@ -2752,6 +2756,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
