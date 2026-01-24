@@ -128,8 +128,8 @@
       </div>
       <div class="param-group">
         <label style="display:flex; align-items:center; gap:4px;">
-        <input type="checkbox" id="keltnerCheck" checked>
-        <span>Keltner</span>
+          <input type="checkbox" id="keltnerCheck">
+          <span>Keltner</span>
         </label>
         <input type="number" id="keltnerPeriod" value="20">
       </div>
@@ -156,7 +156,7 @@
         <span>比較</span>
       </label>
 
-      <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">␊
+      <select id="compareSymbolSelect" style="padding:2px 6px; border:1px solid #ccc; border-radius:3px; background:#fff; min-width:150px;">
         <option value="">選択してください</option>
       </select>
       
@@ -338,8 +338,8 @@ let params = {
   dochian: 20,
   dochianEnabled: false,
   keltner: 20,
-  keltnerEnabled: true
-};␊
+  keltnerEnabled: false
+};
 
 let mainCanvas, mainCtx;
 let volumeCanvas, volumeCtx;
@@ -715,7 +715,10 @@ async function autoLoadChartList(){
       throw new Error("225chartlist.csv が空または形式が不正です");
     }
     
+    el.textContent = `読込完了,225銘柄=${chartListItems.length}`;
+
     // 500chartlist.csv (500銘柄) を読み込み
+    
     try {
       const res500 = await fetch('./500chartlist.csv');
       if(res500.ok) {
@@ -3034,6 +3037,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
