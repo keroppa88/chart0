@@ -39,17 +39,18 @@
     .label-tight { display:inline-flex; align-items:center; gap:0; }
     .label-tight input { margin:0; }
 
-    canvas { display:block; width:100%; cursor:crosshair; }
-    #mainChart { height:350px; border:1px solid #ddd; border-bottom:none; position:relative; }
+    canvas { display:block; width:100%; cursor:crosshair; box-sizing:border-box; }
+    #mainChart { height:350px; border:1px solid #ddd; border-bottom:none; position:relative; box-sizing:border-box; }
 
-    .indicator-container { border:1px solid #ddd; border-top:none; background:#fff; position:relative; min-height:24px; }
+    #indicatorsList { width:100%; }
+    .indicator-container { border:1px solid #ddd; border-top:none; background:#fff; position:relative; min-height:24px; width:100%; box-sizing:border-box; }
     .indicator-controls { position:absolute; top:2px; right:2px; pointer-events:auto; display:flex; gap:2px; z-index:10; }
     .btn-icon { width:16px; height:16px; border:none; color:#fff; font-size:10px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:2px; opacity:0.7; }
     .btn-icon:hover { opacity:1; }
     .btn-move { background:#2196f3; }
     .btn-toggle { background:#666; }
     .btn-expand { background:#4caf50; }
-    .indicator-wrapper { height:120px; transition:height 0.2s; overflow:hidden; }
+    .indicator-wrapper { height:120px; transition:height 0.2s; overflow:hidden; width:100%; }
     .indicator-wrapper.collapsed { height:0; }
     .params-wrapper { display:flex; flex-wrap:wrap; gap:8px; transition:all 0.2s; overflow:hidden; }
     .params-wrapper.collapsed { height:0; opacity:0; }
@@ -121,24 +122,9 @@
       <div class="param-group">
         <label style="display:flex; align-items:center; gap:4px;">
           <input type="checkbox" id="dochianCheck">
-          <span>Dochian</span>
+          <span>Donchian</span>
         </label>
         <input type="number" id="dochianPeriod" value="20">
-      </div>
-      <div class="param-group">
-        <div class="param-group">
-        <label style="display:flex; align-items:center; gap:4px;">
-          <input type="checkbox" id="dochianCheck">
-          <span>Dochian</span>
-        </label>
-        <input type="number" id="dochianPeriod" value="20">
-      </div>
-      <div class="param-group">
-        <label style="display:flex; align-items:center; gap:4px;">
-          <input type="checkbox" id="keltnerCheck">
-          <span>Keltner</span>
-        </label>
-        <input type="number" id="keltnerPeriod" value="20">
       </div>
     </div>
   </div>
@@ -3041,6 +3027,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
