@@ -1439,13 +1439,13 @@ function drawMain(visibleCandles, visibleIndices){
       ctx.fillText(line4, pad.l + 5, pad.t + 85);
     }
   }
-  ctx.restore();
-  }
     
-  let minP = Infinity, maxP = -Infinity;
-
-  let displaySeries = visibleCandles;
-  let displayCompareSeries = [];
+  ctx.restore();
+}
+    
+let minP = Infinity, maxP = -Infinity;
+let displaySeries = visibleCandles;
+let displayCompareSeries = [];
   
   if(compareEnabled && compareSymbolCode && compareSeries.length > 0){
     let mainFirstOpen = null;
@@ -2743,6 +2743,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
