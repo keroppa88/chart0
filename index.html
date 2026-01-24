@@ -2580,11 +2580,6 @@ function setupEventListeners(){
     drawChart();
   });
 
-  document.getElementById('vwapCheck')?.addEventListener('change', (e) => {    
-    vwapEnabled = e.target.checked;
-    drawChart();
-  });
-
   document.getElementById('volumeProfileCheck')?.addEventListener('change', (e) => {
     volumeProfileEnabled = e.target.checked;
     drawChart();
@@ -2757,6 +2752,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
