@@ -1,8 +1,9 @@
 // financedata フォルダ配下の銘柄別CSVに、
 // 当日(date指定)の財務スナップショットを追記する。
-// ・/v2/fins/summary を date 指定・code 未指定で一括取得
-// ・既存CSVに DiscDate が無ければ追記
-// ・過去分は触らない（ベースCSV前提）
+///v2/fins/summary を date 指定・code 未指定で一括取得
+// 銘柄未指定で全銘柄、当日分の発表のみを取得する。
+//financedataフォルダのcsvに照合して最終行に追記する
+//過去分は触らない（ベースCSV前提）
 
 const fs = require("fs");
 const path = require("path");
