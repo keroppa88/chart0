@@ -22,7 +22,18 @@
     .modal-title{ font-size:14px; font-weight:700; margin:0; }
     .modal-close{ font-size:12px; padding:3px 8px; background:#e0e0e0; color:#000; border:1px solid #bdbdbd; border-radius:4px; cursor:pointer; }
     .modal-close:hover{ background:#d5d5d5; }
-    .modal-body{ font-size:13px; color:#333; line-height:1.7; white-space:pre-line; }
+    .modal-body{ font-size:13px; color:#333; line-height:1.7; }
+    .help-intro{ margin:0 0 8px; font-weight:600; }
+    .help-section{ border-top:1px solid #eee; padding:6px 0; }
+    .help-section:first-of-type{ border-top:none; }
+    .help-section summary{ cursor:pointer; font-weight:600; list-style:none; }
+    .help-section summary::-webkit-details-marker{ display:none; }
+    .help-section summary::before{ content:"▶"; display:inline-block; margin-right:6px; transition:transform 0.2s; font-size:11px; }
+    .help-section[open] summary::before{ transform:rotate(90deg); }
+    .help-section-body{ padding:6px 0 0 16px; color:#444; }
+    .help-section-body p{ margin:0 0 6px; }
+    .help-section-body p:last-child{ margin-bottom:0; }
+
 
     .controls-row { display:flex; flex-wrap:wrap; gap:15px; margin-bottom:15px; align-items:center; padding-bottom:10px; border-bottom:1px solid #eee; }
     .param-group { display:flex; align-items:center; gap:3px; font-size:12px; background:#f9f9f9; padding:2px 6px; border-radius:4px; border:1px solid #eee; }
@@ -277,44 +288,18 @@
 
 <div id="helpModal" class="modal-overlay" aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle">
-    <div class="modal-header">
-      <p class="modal-title" id="helpModalTitle">　説明</p>
-      <button id="helpCloseBtn" class="modal-close" type="button">閉じる</button>
-    </div>
-    <div class="modal-body">
-ハイスピード設計！<br>
-<br>
-●爆速表示<br>
-　　爆速表示!＝左右矢印。左右＝1ずつ、上下＝10ずつ。基本的にはPC使用が前提。
-　　スマホ用に左右矢印ボタンを配置。押しっぱなしで高速表示。チャート上部の不要な行は折り畳み可能。
-<br>
-●ローソク足エリア<br>
-　　マウスホイールで期間増減、ドラッグで左右移動。
-　　日足・週足・月足の切り替え。
-　　移動平均線、VWAP線、ドンチャン・チャンネル、ケルトナー・チャンネル、価格帯別出来高など。
-　　移動平均線、VWAP線は数値0にするとローソク足エリア上の線表示オフ。
-　　価格帯別出来高はVWAPで計算しているので、グラフ表示の見た目がローソク足終値と一致しないことがある。
-　　情報としてチャート表示期間の勝率、陽線率、騰落率、比較時の相関係数などを表示。
-　　JPX配信の財務データから時価総額、通期予想PERなども表示。
-　　任意の銘柄を比較対象にすることができる。表示範囲初日始値＝100。
-　　右端の「-」ボタンで各項目非表示。
-●各種テクニカル指標<br>
-　　ローソク足エリアの下部にあるテクニカル指標エリアは表示・非表示・場所入れ替えが可能。
-　　各種数値入力欄にマウスを合わせた状態であれば、上下ボタンで数値増減、動的描写。
-●銘柄<br>
-　　全銘柄リストは全市場の約1000銘柄。日経平均銘柄＝225、日経500銘柄＝500。
-　　株価指数、業種別指数、商品価格などはETFで代替。半導体株指数は推計値を追加補充。
-　　商品ETF、海外株式ETFは「為替ヘッジ無し」。円ベースの値動き。
-●仕様<br>
-　　平日17時台に当日終値を自動更新。<br>
-　　公式JPXAPIでデータ取得→github上の個別CSVにデータ収納→HTMLブラウザアプリで表示。
-　　chatGPT、Claudeの問答をプログラムに手でコピペする原始人スタイルで開発。3000行。
-　　2026/01/19～
-●開発趣旨<br>
-　　現状のチャート閲覧環境は重くて遅い。20年以上、ほとんど進化がみられない分野。
-　　yahooファイナンス、ログイン煩雑な証券会社アプリ、プロ用情報端末を超える爆速実現が開発趣旨。
-　　JPX（日本取引所）が2026/01/19より個人投資家向けの情報販売を拡充、それに乗っかって開発を開始。
-</div>
+    .modal-body{ font-size:13px; color:#333; line-height:1.7; }
+    .help-intro{ margin:0 0 8px; font-weight:600; }
+    .help-section{ border-top:1px solid #eee; padding:6px 0; }
+    .help-section:first-of-type{ border-top:none; }
+    .help-section summary{ cursor:pointer; font-weight:600; list-style:none; }
+    .help-section summary::-webkit-details-marker{ display:none; }
+    .help-section summary::before{ content:"▶"; display:inline-block; margin-right:6px; transition:transform 0.2s; font-size:11px; }
+    .help-section[open] summary::before{ transform:rotate(90deg); }
+    .help-section-body{ padding:6px 0 0 16px; color:#444; }
+    .help-section-body p{ margin:0 0 6px; }
+    .help-section-body p:last-child{ margin-bottom:0; }
+
 <script>
 /* =========================
    State
@@ -3044,6 +3029,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
