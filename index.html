@@ -1715,10 +1715,10 @@ if(showFinancialInfo){
         const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
         ctx.fillText(line2, pad.l + 5, pad.t + 45);
         
-        const line3 = `＋寄時の始値終値騰落率${fmtAvg(plusOpenOcPct)}（＋時平均${fmtAvg(plusOpenPosAvg)}、－時平均${fmtAvg(plusOpenNegAvg)}）`;
+        const line3 = `＋寄時の陽線率${fmtAvg(plusOpenOcPct)}（＋時${fmtAvg(plusOpenPosAvg)}、－時${fmtAvg(plusOpenNegAvg)}）`;
         ctx.fillText(line3, pad.l + 5, pad.t + 65);
 
-        const line4 = `－寄時の始値終値騰落率${fmtAvg(minusOpenOcPct)}（＋時平均${fmtAvg(minusOpenPosAvg)}、－時平均${fmtAvg(minusOpenNegAvg)}）`;
+        const line4 = `－寄時の陽線率${fmtAvg(minusOpenOcPct)}（＋時${fmtAvg(minusOpenPosAvg)}、－時${fmtAvg(minusOpenNegAvg)}）`;
         ctx.fillText(line4, pad.l + 5, pad.t + 85);
 
         let line5 = "";
