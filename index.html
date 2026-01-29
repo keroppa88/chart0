@@ -2620,9 +2620,9 @@ function onWheelZoom(e){
 
   const shrink = (e.deltaY < 0);
 
-  // 1秒に2回以上なら表示本数の3%、それ以外は1本
+  // 1秒に2回以下なら1本、3回以上なら表示本数の3%
   let delta;
-  if(wheelCount >= 2){
+  if(wheelCount > 2){
     delta = Math.max(1, Math.round(displayCount * 0.03));
   } else {
     delta = 1;
