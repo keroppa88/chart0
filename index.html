@@ -1943,34 +1943,95 @@ let displayCompareSeries = [];
       dateLabels.push(...allMonthLabels);
     }
   }else if(showMonthStart){
-    let lastMonth = null;
-    const allMonthPositions = [];
-    const allMonthLabels = [];
-    
-    visibleCandles.forEach((c, i) => {
+    // 実データの年数スパンを計算
+    let firstDate = null;
+    let lastDate = null;
+    visibleCandles.forEach((c) => {
       if(!c.date) return;
       const dateObj = new Date(c.date);
-      const currentMonth = `${String(dateObj.getFullYear()).slice(-2)}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-
-      if(currentMonth !== lastMonth){
-        allMonthPositions.push(i);
-        allMonthLabels.push(currentMonth);
-        lastMonth = currentMonth;
-      }
+      if(!firstDate || dateObj < firstDate) firstDate = dateObj;
+      if(!lastDate || dateObj > lastDate) lastDate = dateObj;
     });
-    
-    if(allMonthPositions.length >= 20){
-      const lastIdx = allMonthPositions.length - 1;
-      datePositions.push(allMonthPositions[lastIdx]);
-      dateLabels.push(allMonthLabels[lastIdx]);
-      
-      for(let i = lastIdx - 2; i >= 0; i -= 2){
-        datePositions.unshift(allMonthPositions[i]);
-        dateLabels.unshift(allMonthLabels[i]);
+
+    const yearSpan = firstDate && lastDate ?
+      (lastDate.getFullYear() - firstDate.getFullYear() + 1) : 0;
+
+    // 数年スパン（3年以上）の場合は特定月に縦線を表示
+    if(yearSpan >= 3){
+      // 各月の最初の日を収集
+      const monthFirstPositions = [];
+      let lastYearMonth = null;
+
+      visibleCandles.forEach((c, i) => {
+        if(!c.date) return;
+        const dateObj = new Date(c.date);
+        const year = dateObj.getFullYear();
+        const month = dateObj.getMonth() + 1; // 1-12
+        const yearMonth = `${year}-${month}`;
+
+        if(yearMonth !== lastYearMonth){
+          monthFirstPositions.push({
+            index: i,
+            year: year,
+            month: month,
+            date: dateObj
+          });
+          lastYearMonth = yearMonth;
+        }
+      });
+
+      // 年スパンに応じて表示する月を決定
+      let targetMonths;
+      if(yearSpan >= 10){
+        // 10年以上: 年1回（1月のみ）
+        targetMonths = [1];
+      }else if(yearSpan >= 5){
+        // 5-9年: 年2回（1月と7月）
+        targetMonths = [1, 7];
+      }else{
+        // 3-4年: 年4回（1月、4月、7月、10月）
+        targetMonths = [1, 4, 7, 10];
       }
+
+      // 対象月のみを抽出
+      monthFirstPositions.forEach((item) => {
+        if(targetMonths.includes(item.month)){
+          datePositions.push(item.index);
+          const label = `${String(item.year).slice(-2)}-${String(item.month).padStart(2, '0')}`;
+          dateLabels.push(label);
+        }
+      });
     }else{
-      datePositions.push(...allMonthPositions);
-      dateLabels.push(...allMonthLabels);
+      // 短期間（3年未満）の場合は従来のロジック
+      let lastMonth = null;
+      const allMonthPositions = [];
+      const allMonthLabels = [];
+
+      visibleCandles.forEach((c, i) => {
+        if(!c.date) return;
+        const dateObj = new Date(c.date);
+        const currentMonth = `${String(dateObj.getFullYear()).slice(-2)}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+
+        if(currentMonth !== lastMonth){
+          allMonthPositions.push(i);
+          allMonthLabels.push(currentMonth);
+          lastMonth = currentMonth;
+        }
+      });
+
+      if(allMonthPositions.length >= 20){
+        const lastIdx = allMonthPositions.length - 1;
+        datePositions.push(allMonthPositions[lastIdx]);
+        dateLabels.push(allMonthLabels[lastIdx]);
+
+        for(let i = lastIdx - 2; i >= 0; i -= 2){
+          datePositions.unshift(allMonthPositions[i]);
+          dateLabels.unshift(allMonthLabels[i]);
+        }
+      }else{
+        datePositions.push(...allMonthPositions);
+        dateLabels.push(...allMonthLabels);
+      }
     }
   }else{
     // 実データの開始位置と終了位置を特定（左パディングを除外）
