@@ -1980,7 +1980,24 @@ let displayCompareSeries = [];
       }
     }
   }
-  
+
+  // 日付ラベルを最大30個に制限（それ以上は間引く）
+  const maxDateLabels = 30;
+  if(datePositions.length > maxDateLabels){
+    const newPositions = [];
+    const newLabels = [];
+    const step = (datePositions.length - 1) / (maxDateLabels - 1);
+    for(let i = 0; i < maxDateLabels; i++){
+      const idx = Math.round(i * step);
+      newPositions.push(datePositions[idx]);
+      newLabels.push(dateLabels[idx]);
+    }
+    datePositions.length = 0;
+    dateLabels.length = 0;
+    datePositions.push(...newPositions);
+    dateLabels.push(...newLabels);
+  }
+
   if(dateLineEnabled){
     ctx.save();
     ctx.strokeStyle = '#e0e0e0';
