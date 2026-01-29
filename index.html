@@ -1915,7 +1915,7 @@ let displayCompareSeries = [];
     visibleCandles.forEach((c, i) => {
       if(!c.date) return;
       const dateObj = new Date(c.date);
-      const yearMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+      const yearMonth = `${String(dateObj.getFullYear()).slice(-2)}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
       allMonthPositions.push(i);
       allMonthLabels.push(yearMonth);
       allMonthNumbers.push(dateObj.getMonth() + 1);
@@ -1950,8 +1950,8 @@ let displayCompareSeries = [];
     visibleCandles.forEach((c, i) => {
       if(!c.date) return;
       const dateObj = new Date(c.date);
-      const currentMonth = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-      
+      const currentMonth = `${String(dateObj.getFullYear()).slice(-2)}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+
       if(currentMonth !== lastMonth){
         allMonthPositions.push(i);
         allMonthLabels.push(currentMonth);
@@ -1977,7 +1977,9 @@ let displayCompareSeries = [];
     for(let i = 0; i < visibleCandles.length; i += interval){
       if(visibleCandles[i].date){
         datePositions.push(i);
-        dateLabels.push(visibleCandles[i].date);
+        const d = new Date(visibleCandles[i].date);
+        const shortDate = `${String(d.getFullYear()).slice(-2)}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        dateLabels.push(shortDate);
       }
     }
   }
@@ -2595,8 +2597,10 @@ function handleTooltip(e, canvas){
   const vwap = indicators.vwap[sIdx]; // 追加
 
   const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
+  const dateObj = new Date(c.date);
+  const shortDate = `${String(dateObj.getFullYear()).slice(-2)}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
 
-  let html = `<strong>${c.date}${timeframeLabel}</strong><br>`;
+  let html = `<strong>${shortDate}${timeframeLabel}</strong><br>`;
   html += `始:${fmt(c.open)} 高:${fmt(c.high)} 安:${fmt(c.low)} 終:${fmt(c.close)}<br>`;
   if(c.volume != null){
     html += `出来高:${fmt(c.volume)}<br>`;
