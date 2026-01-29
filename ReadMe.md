@@ -43,7 +43,8 @@
 * 基本的にはAIに質問して返答をコピペしてプログラムに貼り付けるという原始人的な手法で開発した。
 ## 構造
 
-<img width="916" height="457" alt="539358097-32d8bd5a-d7ca-4196-afdd-8ec997b6a422" src="https://github.com/user-attachments/assets/a5190012-fce3-4ee0-8fef-890b793abc40" />
+<img width="916" height="457" alt="540156890-a5190012-fce3-4ee0-8fef-890b793abc40" src="https://github.com/user-attachments/assets/9d1ef055-170f-4969-b944-0351dc5e16fa" />
+
 
 ## 銘柄追加方法のメモ
 * 銘柄Aの株価データを収集
@@ -54,6 +55,7 @@
 * 225銘柄の場合は、225chartlist.csvに銘柄名を加えて追加する。
 * 定時収集の対象にするため225get.jsに銘柄コードを加える。
 * ※csvの年月日（2026-01-04）が崩れると認識しない仕様。エクセルで作業する場合は文字列扱いにする。
+
 
 
 
