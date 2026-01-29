@@ -369,6 +369,9 @@ let isDragging = false;
 let dragStartX = 0;
 let dragStartOffset = 0;
 
+let wheelCount = 0;
+let lastWheelTime = 0;
+
 let params = {
   ma1: 20, ma2: 60,
   vwap: 5,  // 追加
@@ -2607,13 +2610,20 @@ function onWheelZoom(e){
   e.preventDefault();
   if(!series || series.length === 0) return;
 
+  const now = Date.now();
+  // 1秒以上経過していたらカウントリセット
+  if(now - lastWheelTime > 1000){
+    wheelCount = 0;
+  }
+  wheelCount++;
+  lastWheelTime = now;
+
   const shrink = (e.deltaY < 0);
 
-  // 一気に回した時(deltaYが大きい時)は表示本数の5%、そうでなければ1本
-  const threshold = 150;
+  // 1秒に2回以上なら表示本数の3%、それ以外は1本
   let delta;
-  if(Math.abs(e.deltaY) >= threshold){
-    delta = Math.max(1, Math.round(displayCount * 0.05));
+  if(wheelCount >= 2){
+    delta = Math.max(1, Math.round(displayCount * 0.03));
   } else {
     delta = 1;
   }
