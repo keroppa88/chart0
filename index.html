@@ -1293,16 +1293,16 @@ function recomputeIndicators(){
 function calcStatsForVisibleWindow(){
   if(!series || series.length === 0){
     return { winRate: null, upAvg: null, downAvg: null, totalReturn: null,
-             plusOpenOcPct: null, plusOpenPosAvg: null, plusOpenNegAvg: null,
-             minusOpenOcPct: null, minusOpenPosAvg: null, minusOpenNegAvg: null };
+             plusOpenOcPct: null, plusOpenBullRate: null, plusOpenPosRate: null, plusOpenNegRate: null, plusOpenPosAvg: null, plusOpenNegAvg: null,
+             minusOpenOcPct: null, minusOpenBullRate: null, minusOpenPosRate: null, minusOpenNegRate: null, minusOpenPosAvg: null, minusOpenNegAvg: null };
   }
 
   const { visibleIndices } = getVisibleWindow();
   const idxs = visibleIndices.filter(i => i != null);
   if(idxs.length === 0){
     return { winRate: null, upAvg: null, downAvg: null, totalReturn: null,
-             plusOpenOcPct: null, plusOpenPosAvg: null, plusOpenNegAvg: null,
-             minusOpenOcPct: null, minusOpenPosAvg: null, minusOpenNegAvg: null };
+             plusOpenOcPct: null, plusOpenBullRate: null, plusOpenPosRate: null, plusOpenNegRate: null, plusOpenPosAvg: null, plusOpenNegAvg: null,
+             minusOpenOcPct: null, minusOpenBullRate: null, minusOpenPosRate: null, minusOpenNegRate: null, minusOpenPosAvg: null, minusOpenNegAvg: null };
   }
 
   let winN = 0, winDen = 0;
@@ -1314,11 +1314,13 @@ function calcStatsForVisibleWindow(){
   let plusOpenSum = 0, plusOpenCnt = 0;
   let plusOpenPosSum = 0, plusOpenPosCnt = 0;
   let plusOpenNegSum = 0, plusOpenNegCnt = 0;
+  let plusOpenZeroCnt = 0;
 
   // －寄時（始値が前日終値より低い）の統計
   let minusOpenSum = 0, minusOpenCnt = 0;
   let minusOpenPosSum = 0, minusOpenPosCnt = 0;
   let minusOpenNegSum = 0, minusOpenNegCnt = 0;
+  let minusOpenZeroCnt = 0;
 
   for(let k = 0; k < idxs.length; k++){
     const i = idxs[k];
@@ -1364,6 +1366,8 @@ function calcStatsForVisibleWindow(){
             }else if(ocPct < 0){
               plusOpenNegSum += ocPct;
               plusOpenNegCnt++;
+            }else{
+              plusOpenZeroCnt++;
             }
           }else if(c.open < p.close){
             // －寄時（始値が前日終値より低い）
@@ -1375,6 +1379,8 @@ function calcStatsForVisibleWindow(){
             }else if(ocPct < 0){
               minusOpenNegSum += ocPct;
               minusOpenNegCnt++;
+            }else{
+              minusOpenZeroCnt++;
             }
           }
         }
@@ -1391,17 +1397,23 @@ function calcStatsForVisibleWindow(){
 
   // ＋寄時の統計
   const plusOpenOcPct = plusOpenCnt > 0 ? (plusOpenSum / plusOpenCnt) : null;
+  const plusOpenBullRate = plusOpenCnt > 0 ? (plusOpenPosCnt / plusOpenCnt) * 100 : null;
+  const plusOpenPosRate = plusOpenCnt > 0 ? (plusOpenPosCnt / plusOpenCnt) * 100 : null;
+  const plusOpenNegRate = plusOpenCnt > 0 ? (plusOpenNegCnt / plusOpenCnt) * 100 : null;
   const plusOpenPosAvg = plusOpenPosCnt > 0 ? (plusOpenPosSum / plusOpenPosCnt) : null;
   const plusOpenNegAvg = plusOpenNegCnt > 0 ? (plusOpenNegSum / plusOpenNegCnt) : null;
 
   // －寄時の統計
   const minusOpenOcPct = minusOpenCnt > 0 ? (minusOpenSum / minusOpenCnt) : null;
+  const minusOpenBullRate = minusOpenCnt > 0 ? (minusOpenPosCnt / minusOpenCnt) * 100 : null;
+  const minusOpenPosRate = minusOpenCnt > 0 ? (minusOpenPosCnt / minusOpenCnt) * 100 : null;
+  const minusOpenNegRate = minusOpenCnt > 0 ? (minusOpenNegCnt / minusOpenCnt) * 100 : null;
   const minusOpenPosAvg = minusOpenPosCnt > 0 ? (minusOpenPosSum / minusOpenPosCnt) : null;
   const minusOpenNegAvg = minusOpenNegCnt > 0 ? (minusOpenNegSum / minusOpenNegCnt) : null;
 
   return { winRate, upAvg, downAvg, totalReturn,
-           plusOpenOcPct, plusOpenPosAvg, plusOpenNegAvg,
-           minusOpenOcPct, minusOpenPosAvg, minusOpenNegAvg };
+           plusOpenOcPct, plusOpenBullRate, plusOpenPosRate, plusOpenNegRate, plusOpenPosAvg, plusOpenNegAvg,
+           minusOpenOcPct, minusOpenBullRate, minusOpenPosRate, minusOpenNegRate, minusOpenPosAvg, minusOpenNegAvg };
 }
 
 function calcCorrelationForVisibleWindow(){
@@ -1690,8 +1702,8 @@ function drawMain(visibleCandles, visibleIndices){
       ctx.fillText(correlationText, pad.l + 5, pad.t + 45);
     }else{
       const { winRate, upAvg, downAvg, totalReturn,
-              plusOpenOcPct, plusOpenPosAvg, plusOpenNegAvg,
-              minusOpenOcPct, minusOpenPosAvg, minusOpenNegAvg } = calcStatsForVisibleWindow();
+              plusOpenOcPct, plusOpenBullRate, plusOpenPosRate, plusOpenNegRate, plusOpenPosAvg, plusOpenNegAvg,
+              minusOpenOcPct, minusOpenBullRate, minusOpenPosRate, minusOpenNegRate, minusOpenPosAvg, minusOpenNegAvg } = calcStatsForVisibleWindow();
       
       const fmtPct = (v) => (v == null || Number.isNaN(v)) ? "-" : v.toFixed(1) + "%";
       const fmtAvg = (v) => {
@@ -1715,10 +1727,10 @@ if(showFinancialInfo){
         const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
         ctx.fillText(line2, pad.l + 5, pad.t + 45);
         
-        const line3 = `＋寄時の陽線率${fmtAvg(plusOpenOcPct)}（＋時${fmtAvg(plusOpenPosAvg)}、－時${fmtAvg(plusOpenNegAvg)}）`;
+        const line3 = `＋寄･陽線率${fmtPct(plusOpenBullRate)}（＋時(${fmtPct(plusOpenPosRate)})${fmtAvg(plusOpenPosAvg)}、－時(${fmtPct(plusOpenNegRate)})${fmtAvg(plusOpenNegAvg)}）`;
         ctx.fillText(line3, pad.l + 5, pad.t + 65);
 
-        const line4 = `－寄時の陽線率${fmtAvg(minusOpenOcPct)}（＋時${fmtAvg(minusOpenPosAvg)}、－時${fmtAvg(minusOpenNegAvg)}）`;
+        const line4 = `－寄･陽線率${fmtPct(minusOpenBullRate)}（＋時(${fmtPct(minusOpenPosRate)})${fmtAvg(minusOpenPosAvg)}、－時(${fmtPct(minusOpenNegRate)})${fmtAvg(minusOpenNegAvg)}）`;
         ctx.fillText(line4, pad.l + 5, pad.t + 85);
 
         let line5 = "";
