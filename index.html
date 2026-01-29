@@ -1973,13 +1973,31 @@ let displayCompareSeries = [];
       dateLabels.push(...allMonthLabels);
     }
   }else{
-    const interval = Math.ceil(visibleCandles.length / 6);
-    for(let i = 0; i < visibleCandles.length; i += interval){
-      if(visibleCandles[i].date){
-        datePositions.push(i);
-        const d = new Date(visibleCandles[i].date);
-        const shortDate = `${String(d.getFullYear()).slice(-2)}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        dateLabels.push(shortDate);
+    // 実データの開始位置と終了位置を特定（左パディングを除外）
+    let dataStart = 0;
+    let dataEnd = visibleCandles.length - 1;
+
+    // 左パディングをスキップ
+    while(dataStart < visibleCandles.length && !visibleCandles[dataStart].date){
+      dataStart++;
+    }
+    // 右パディングをスキップ
+    while(dataEnd >= dataStart && !visibleCandles[dataEnd].date){
+      dataEnd--;
+    }
+
+    const dataLength = dataEnd - dataStart + 1;
+
+    if(dataLength > 0){
+      // 実データ部分のみを基準に間隔を計算
+      const interval = Math.max(1, Math.ceil(dataLength / 6));
+      for(let i = dataStart; i <= dataEnd; i += interval){
+        if(visibleCandles[i].date){
+          datePositions.push(i);
+          const d = new Date(visibleCandles[i].date);
+          const shortDate = `${String(d.getFullYear()).slice(-2)}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          dateLabels.push(shortDate);
+        }
       }
     }
   }
