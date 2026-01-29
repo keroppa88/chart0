@@ -2608,7 +2608,17 @@ function onWheelZoom(e){
   if(!series || series.length === 0) return;
 
   const shrink = (e.deltaY < 0);
-  displayCount += (shrink ? -1 : +1);
+
+  // 一気に回した時(deltaYが大きい時)は表示本数の5%、そうでなければ1本
+  const threshold = 150;
+  let delta;
+  if(Math.abs(e.deltaY) >= threshold){
+    delta = Math.max(1, Math.round(displayCount * 0.05));
+  } else {
+    delta = 1;
+  }
+
+  displayCount += (shrink ? -delta : +delta);
 
   clampView();
   updateViewInfo();
