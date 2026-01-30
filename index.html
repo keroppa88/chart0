@@ -1202,26 +1202,35 @@ function calculateADX(data, period){
 // ↓↓↓ ここに追加 ↓↓↓
 function calculateVWAP(data, period){
   const result = new Array(data.length).fill(null);
-  
+
   if(period === 0) return result; // 0の場合は非表示
-  
+
+  // 出来高と売買代金の両方が揃っているデータがあるかチェック
+  // 海外銘柄など売買代金がない場合はVWAP計算不可
+  const hasValidTradingData = data.some(item =>
+    item.volume != null && item.volume > 0 &&
+    item.tradingValue != null && item.tradingValue > 0
+  );
+
+  if(!hasValidTradingData) return result; // 有効なデータがない場合は計算しない
+
   for(let i = period - 1; i < data.length; i++){
     let totalTradingValue = 0;
     let totalVolume = 0;
-    
+
     for(let j = 0; j < period; j++){
       const item = data[i - j];
-      if(item.volume != null && item.volume > 0 && item.tradingValue != null){
+      if(item.volume != null && item.volume > 0 && item.tradingValue != null && item.tradingValue > 0){
         totalTradingValue += item.tradingValue;
         totalVolume += item.volume;
       }
     }
-    
+
     if(totalVolume > 0){
       result[i] = totalTradingValue / totalVolume;
     }
   }
-  
+
   return result;
 }
 
@@ -2767,7 +2776,9 @@ function handleTooltip(e, canvas){
     const ma2Label = params.ma2 > 0 ? `<span style="color:#2196f3">MA${params.ma2}:${fmt(ma2)}</span>` : '';
     html += `${ma1Label}${ma1Label && ma2Label ? ' ' : ''}${ma2Label}<br>`;
   }
-  html += `<span style="color:#9c27b0">VWAP:${fmt(vwap)}</span><br>`; // 追加
+  if(vwap != null){
+    html += `<span style="color:#9c27b0">VWAP:${fmt(vwap)}</span><br>`;
+  }
   html += `<span style="color:#9c27b0">RSI:${fmt(rsi)}</span><br>`;
   html += `<span style="color:#00bcd4">K:${fmt(stK)}</span> <span style="color:#ff5722">D:${fmt(stD)}</span><br>`;
   html += `MACD:${fmt(macd)} Sig:${fmt(sig)}<br>`;
