@@ -158,8 +158,9 @@
   <div id="legendWrapper" class="legend-wrapper">
     <!-- グループ2: 比較、価格帯別出来高、VWAP、日付ライン -->
     <div class="legend-group">
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="financialInfoCheck" checked>
+      <label style="display:flex; align-items:center; gap:2px; cursor:pointer;">
+        <input type="checkbox" id="financialInfoCheck1" checked>
+        <input type="checkbox" id="financialInfoCheck2" checked>
         <span>情報</span>
       </label>
       
@@ -442,7 +443,8 @@ let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
 let dateLineEnabled = false;
 let volumeProfileEnabled = false; // 追加（将来用）
-let showFinancialInfo = true; // 追加
+let showFinancialInfo1 = true; // ①＋寄・－寄の日中騰落率
+let showFinancialInfo2 = true; // ②勝率、PER、時価総額
   
 /* =========================
    Data Version
@@ -1716,45 +1718,55 @@ function drawMain(visibleCandles, visibleIndices){
       ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillText(`${timeframeLabel}騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
 
-if(showFinancialInfo){
-        const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
-        ctx.fillText(line2, pad.l + 5, pad.t + 45);
-        
-        const line3 = `＋寄･日中騰落率${fmtAvg(plusOpenOcPct)}（＋時(${fmtPct(plusOpenPosRate)})${fmtAvg(plusOpenPosAvg)}、－時(${fmtPct(plusOpenNegRate)})${fmtAvg(plusOpenNegAvg)}）`;
-        ctx.fillText(line3, pad.l + 5, pad.t + 65);
+let infoY = pad.t + 45;
 
-        const line4 = `－寄･日中騰落率${fmtAvg(minusOpenOcPct)}（＋時(${fmtPct(minusOpenPosRate)})${fmtAvg(minusOpenPosAvg)}、－時(${fmtPct(minusOpenNegRate)})${fmtAvg(minusOpenNegAvg)}）`;
-        ctx.fillText(line4, pad.l + 5, pad.t + 85);
+      // ②勝率、PER、時価総額
+      if(showFinancialInfo2){
+        const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
+        ctx.fillText(line2, pad.l + 5, infoY);
+        infoY += 20;
 
         let line5 = "";
         if(window.currentFinancialData && dailySeries && dailySeries.length > 0){
           const { eps, shares } = window.currentFinancialData;
           const latestPrice = dailySeries[dailySeries.length - 1].close;
-          
+
           if(latestPrice && eps && shares){
             const per = latestPrice / eps;
             const perText = `PER${per.toFixed(1)}倍`;
-            
+
             const marketCap = shares * latestPrice;
             let marketCapText = "";
-            
+
             const oku = Math.floor(marketCap / 100000000);
             const chou = Math.floor(oku / 10000);
             const remainOku = oku % 10000;
-            
+
             if(chou > 0){
               marketCapText = `時価総額${chou}兆${remainOku}億円`;
             }else{
               marketCapText = `時価総額${oku}億円`;
             }
-            
+
             line5 = `${perText} ${marketCapText}`;
           }
         }
 
         if(line5){
-          ctx.fillText(line5, pad.l + 5, pad.t + 105);
+          ctx.fillText(line5, pad.l + 5, infoY);
+          infoY += 20;
         }
+      }
+
+      // ①＋寄・－寄の日中騰落率
+      if(showFinancialInfo1){
+        const line3 = `＋寄･日中騰落率${fmtAvg(plusOpenOcPct)}（＋時(${fmtPct(plusOpenPosRate)})${fmtAvg(plusOpenPosAvg)}、－時(${fmtPct(plusOpenNegRate)})${fmtAvg(plusOpenNegAvg)}）`;
+        ctx.fillText(line3, pad.l + 5, infoY);
+        infoY += 20;
+
+        const line4 = `－寄･日中騰落率${fmtAvg(minusOpenOcPct)}（＋時(${fmtPct(minusOpenPosRate)})${fmtAvg(minusOpenPosAvg)}、－時(${fmtPct(minusOpenNegRate)})${fmtAvg(minusOpenNegAvg)}）`;
+        ctx.fillText(line4, pad.l + 5, infoY);
+        infoY += 20;
       }
     }
     
@@ -3055,8 +3067,13 @@ function setupEventListeners(){
     drawChart();
   });
 
-  document.getElementById('financialInfoCheck')?.addEventListener('change', (e) => {
-    showFinancialInfo = e.target.checked;
+  document.getElementById('financialInfoCheck1')?.addEventListener('change', (e) => {
+    showFinancialInfo1 = e.target.checked;
+    drawChart();
+  });
+
+  document.getElementById('financialInfoCheck2')?.addEventListener('change', (e) => {
+    showFinancialInfo2 = e.target.checked;
     drawChart();
   });
 
