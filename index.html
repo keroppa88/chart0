@@ -1294,16 +1294,16 @@ function recomputeIndicators(){
 function calcStatsForVisibleWindow(){
   if(!series || series.length === 0){
     return { winRate: null, upAvg: null, downAvg: null, totalReturn: null,
-             plusOpenOcPct: null, plusOpenPosAvg: null, plusOpenNegAvg: null,
-             minusOpenOcPct: null, minusOpenPosAvg: null, minusOpenNegAvg: null };
+             plusOpenOcPct: null, plusOpenPosAvg: null, plusOpenNegAvg: null, plusOpenPosRate: null, plusOpenNegRate: null,
+             minusOpenOcPct: null, minusOpenPosAvg: null, minusOpenNegAvg: null, minusOpenPosRate: null, minusOpenNegRate: null };
   }
 
   const { visibleIndices } = getVisibleWindow();
   const idxs = visibleIndices.filter(i => i != null);
   if(idxs.length === 0){
     return { winRate: null, upAvg: null, downAvg: null, totalReturn: null,
-             plusOpenOcPct: null, plusOpenPosAvg: null, plusOpenNegAvg: null,
-             minusOpenOcPct: null, minusOpenPosAvg: null, minusOpenNegAvg: null };
+             plusOpenOcPct: null, plusOpenPosAvg: null, plusOpenNegAvg: null, plusOpenPosRate: null, plusOpenNegRate: null,
+             minusOpenOcPct: null, minusOpenPosAvg: null, minusOpenNegAvg: null, minusOpenPosRate: null, minusOpenNegRate: null };
   }
 
   let winN = 0, winDen = 0;
@@ -1394,15 +1394,19 @@ function calcStatsForVisibleWindow(){
   const plusOpenOcPct = plusOpenCnt > 0 ? (plusOpenSum / plusOpenCnt) : null;
   const plusOpenPosAvg = plusOpenPosCnt > 0 ? (plusOpenPosSum / plusOpenPosCnt) : null;
   const plusOpenNegAvg = plusOpenNegCnt > 0 ? (plusOpenNegSum / plusOpenNegCnt) : null;
+  const plusOpenPosRate = plusOpenCnt > 0 ? (plusOpenPosCnt / plusOpenCnt) * 100 : null;
+  const plusOpenNegRate = plusOpenCnt > 0 ? (plusOpenNegCnt / plusOpenCnt) * 100 : null;
 
   // －寄時の統計
   const minusOpenOcPct = minusOpenCnt > 0 ? (minusOpenSum / minusOpenCnt) : null;
   const minusOpenPosAvg = minusOpenPosCnt > 0 ? (minusOpenPosSum / minusOpenPosCnt) : null;
   const minusOpenNegAvg = minusOpenNegCnt > 0 ? (minusOpenNegSum / minusOpenNegCnt) : null;
+  const minusOpenPosRate = minusOpenCnt > 0 ? (minusOpenPosCnt / minusOpenCnt) * 100 : null;
+  const minusOpenNegRate = minusOpenCnt > 0 ? (minusOpenNegCnt / minusOpenCnt) * 100 : null;
 
   return { winRate, upAvg, downAvg, totalReturn,
-           plusOpenOcPct, plusOpenPosAvg, plusOpenNegAvg,
-           minusOpenOcPct, minusOpenPosAvg, minusOpenNegAvg };
+           plusOpenOcPct, plusOpenPosAvg, plusOpenNegAvg, plusOpenPosRate, plusOpenNegRate,
+           minusOpenOcPct, minusOpenPosAvg, minusOpenNegAvg, minusOpenPosRate, minusOpenNegRate };
 }
 
 function calcCorrelationForVisibleWindow(){
@@ -1691,8 +1695,8 @@ function drawMain(visibleCandles, visibleIndices){
       ctx.fillText(correlationText, pad.l + 5, pad.t + 45);
     }else{
       const { winRate, upAvg, downAvg, totalReturn,
-              plusOpenOcPct, plusOpenPosAvg, plusOpenNegAvg,
-              minusOpenOcPct, minusOpenPosAvg, minusOpenNegAvg } = calcStatsForVisibleWindow();
+              plusOpenOcPct, plusOpenPosAvg, plusOpenNegAvg, plusOpenPosRate, plusOpenNegRate,
+              minusOpenOcPct, minusOpenPosAvg, minusOpenNegAvg, minusOpenPosRate, minusOpenNegRate } = calcStatsForVisibleWindow();
       
       const fmtPct = (v) => (v == null || Number.isNaN(v)) ? "-" : v.toFixed(1) + "%";
       const fmtAvg = (v) => {
@@ -1716,10 +1720,10 @@ if(showFinancialInfo){
         const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
         ctx.fillText(line2, pad.l + 5, pad.t + 45);
         
-        const line3 = `＋寄時の陽線率${fmtAvg(plusOpenOcPct)}（＋時${fmtAvg(plusOpenPosAvg)}、－時${fmtAvg(plusOpenNegAvg)}）`;
+        const line3 = `＋寄･日中騰落率${fmtAvg(plusOpenOcPct)}（＋時(${fmtPct(plusOpenPosRate)})${fmtAvg(plusOpenPosAvg)}、－時(${fmtPct(plusOpenNegRate)})${fmtAvg(plusOpenNegAvg)}）`;
         ctx.fillText(line3, pad.l + 5, pad.t + 65);
 
-        const line4 = `－寄時の陽線率${fmtAvg(minusOpenOcPct)}（＋時${fmtAvg(minusOpenPosAvg)}、－時${fmtAvg(minusOpenNegAvg)}）`;
+        const line4 = `－寄･日中騰落率${fmtAvg(minusOpenOcPct)}（＋時(${fmtPct(minusOpenPosRate)})${fmtAvg(minusOpenPosAvg)}、－時(${fmtPct(minusOpenNegRate)})${fmtAvg(minusOpenNegAvg)}）`;
         ctx.fillText(line4, pad.l + 5, pad.t + 85);
 
         let line5 = "";
