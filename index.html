@@ -324,7 +324,7 @@
         <summary>銘柄</summary>
         <div class="help-section-body">
           <p>全銘柄リストは全市場の約1000銘柄。日経平均銘柄＝225、日経500銘柄＝500。</p>
-          <p>TOPIX、日経平均株価、日経VIは本物指数を採用。別リポジトリで取得したものを反映</p>
+          <p>TOPIX、日経平均株価、日経VI、NYダウ、S&P500、ナス、ラッセル、SOXは本物指数</p>
           <p>その他の株価指数、業種別指数、商品価格などはETFで代替。半導体株指数は推計値を追加補充。</p>
           <p>商品ETF、海外株式ETFは「為替ヘッジ無し」。円ベースの値動き。</p>
         </div>
@@ -332,7 +332,8 @@
       <details class="help-section">
         <summary>仕様</summary>
         <div class="help-section-body">
-          <p>平日17時頃に当日終値を自動更新。</p>
+          <p>日本株、日本株指数は平日17時頃に当日終値を自動更新。</p>
+          <p>米国株指数は火～土の7時頃に自動更新。</p>
           <p>JPX(取引所)APIでデータ取得→github上の個別CSVに収納→HTMLブラウザアプリで表示。</p>
           <p>chatGPT、Claudeの問答をプログラムに手でコピペする原始人スタイルで開発。3000行。</p>
           <p>2026/01/19～</p>
@@ -3258,6 +3259,7 @@ window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
+
 
 
 
