@@ -89,6 +89,7 @@
         <option value="all">全銘柄</option>
         <option value="225">225銘柄</option>
         <option value="500">500銘柄</option>
+        <option value="sisukaigai">指数・海外</option>
       </select>
     </div>
 
@@ -356,6 +357,7 @@
 let chartListItems = null;
 let allChartListItems = null;
 let chart500ListItems = null;
+let sisukaigaiChartListItems = null;
 let symbolCache = new Map();
 let dailySeries = [];
 let series = [];
@@ -699,6 +701,8 @@ function populateSymbolSelect(){
     listItems = chartListItems;
   } else if (mode === '500') {
     listItems = chart500ListItems;
+  } else if (mode === 'sisukaigai') {
+    listItems = sisukaigaiChartListItems;
   } else {
     listItems = allChartListItems;
   }
@@ -801,7 +805,22 @@ async function autoLoadChartList(){
       console.warn('allchartlist.csv の読み込みエラー。225銘柄のみ使用します:', e);
       allChartListItems = [...chartListItems];
     }
-    
+
+    // sisukaigaichartlist (指数・海外) を読み込み
+    try {
+      const resSisukaigai = await fetch('./sisukaigaichartlist');
+      if(resSisukaigai.ok) {
+        const textSisukaigai = await resSisukaigai.text();
+        sisukaigaiChartListItems = parseChartList(textSisukaigai);
+      } else {
+        console.warn('sisukaigaichartlist が見つかりません。');
+        sisukaigaiChartListItems = [];
+      }
+    } catch(e) {
+      console.warn('sisukaigaichartlist の読み込みエラー:', e);
+      sisukaigaiChartListItems = [];
+    }
+
     populateSymbolSelect();
     
     // 初回は最初の銘柄を表示
