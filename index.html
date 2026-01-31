@@ -1248,23 +1248,31 @@ function calculateVolumeProfile(visibleIndices, minPrice, maxPrice){
   const priceRange = maxPrice - minPrice;
   const binSize = priceRange / bins;
   
-  // 各足のVWAP値が属する価格帯に出来高を加算
+  // 各足のVWAP値（またはOHLC4代替価格）が属する価格帯に出来高を加算
   visibleIndices.forEach(sIdx => {
     if(sIdx == null) return;
-    
-    const vwap = indicators.vwap[sIdx];
-    const volume = series[sIdx]?.volume;
-    
-    if(vwap != null && volume != null && volume > 0){
-      // VWAPがどの価格帯に属するか計算（下→上の分割）
-      let binIndex = Math.floor((vwap - minPrice) / binSize);
 
-      // 境界値の処理（vwap === maxPrice は最上位ビン）
-      if(vwap === maxPrice){
+    const item = series[sIdx];
+    const volume = item?.volume;
+
+    if(volume == null || volume <= 0) return;
+
+    // VWAPがあればVWAPを使用、なければ(始値+高値+安値+終値)/4を代替価格として使用
+    let price = indicators.vwap[sIdx];
+    if(price == null && item?.open != null && item?.high != null && item?.low != null && item?.close != null){
+      price = (item.open + item.high + item.low + item.close) / 4;
+    }
+
+    if(price != null){
+      // 価格がどの価格帯に属するか計算（下→上の分割）
+      let binIndex = Math.floor((price - minPrice) / binSize);
+
+      // 境界値の処理（price === maxPrice は最上位ビン）
+      if(price === maxPrice){
         binIndex = bins - 1;
       }
       const clampedIndex = Math.min(bins - 1, Math.max(0, binIndex));
-      
+
       profile[clampedIndex] += volume;
     }
   });
