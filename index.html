@@ -1285,14 +1285,14 @@ async function loadFinancialData(code){
   try{
     const res = await fetch(`./financedata/${code}.csv?v=${DATA_VER}`);
     if(!res.ok) return null;
-    
+
     const text = await res.text();
     const lines = text.trim().split(/\r?\n/);
     if(lines.length < 2) return null;
-    
+
     const lastLine = lines[lines.length - 1];
     const cols = lastLine.split(',').map(s => s.trim());
-    
+
     const profit = toNum(cols[3]);
     const eps = toNum(cols[4]);
     const equityRatio = toNum(cols[7]);
@@ -1304,7 +1304,18 @@ async function loadFinancialData(code){
 
     const shares = profit / eps;
 
-    return { eps, shares, equityRatio, cfo, cfi, cff };
+    // BPS（一株純資産）を後方から走査して最新値を取得（年次決算行のみに値がある）
+    let bps = NaN;
+    for(let i = lines.length - 1; i >= 1; i--){
+      const c = lines[i].split(',').map(s => s.trim());
+      const v = toNum(c[5]);
+      if(!Number.isNaN(v)){
+        bps = v;
+        break;
+      }
+    }
+
+    return { eps, shares, equityRatio, cfo, cfi, cff, bps };
   }catch(e){
     console.log(`財務データ読み込みエラー (${code}):`, e);
     return null;
@@ -1773,39 +1784,44 @@ let infoY = pad.t + 45;
 
         let line5 = "";
         if(window.currentFinancialData && dailySeries && dailySeries.length > 0){
-          const { eps, shares, equityRatio, cfo, cfi, cff } = window.currentFinancialData;
+          const { eps, shares, cfo, cfi, cff, bps } = window.currentFinancialData;
           const latestPrice = dailySeries[dailySeries.length - 1].close;
 
           if(latestPrice && eps && shares){
+            // PER
             const per = latestPrice / eps;
-            const perText = `PER${per.toFixed(1)}倍`;
+            line5 = `PER${per.toFixed(1)}倍`;
 
-            const marketCap = shares * latestPrice;
-            let marketCapText = "";
-
-            const oku = Math.floor(marketCap / 100000000);
-            const chou = Math.floor(oku / 10000);
-            const remainOku = oku % 10000;
-
-            if(chou > 0){
-              marketCapText = `時価総額${chou}兆${remainOku}億円`;
-            }else{
-              marketCapText = `時価総額${oku}億円`;
+            // PBR = 株価 ÷ BPS
+            if(!Number.isNaN(bps) && bps !== 0){
+              const pbr = latestPrice / bps;
+              line5 += ` PBR${pbr.toFixed(2)}倍`;
             }
 
-            line5 = `${perText} ${marketCapText}`;
-
-            // 自己資本比率
-            if(!Number.isNaN(equityRatio)){
-              line5 += ` 自己資本比率${(equityRatio * 100).toFixed(1)}%`;
-            }
-
-            // 株価CF倍率 = 株価 ÷ 一株当たりCF合計
+            // PCFR = 株価 ÷ 一株当たりCF合計
             const cfTotal = (Number.isNaN(cfo) ? 0 : cfo) + (Number.isNaN(cfi) ? 0 : cfi) + (Number.isNaN(cff) ? 0 : cff);
             if(cfTotal !== 0){
               const cfps = cfTotal / shares;
               const pcfr = latestPrice / cfps;
               line5 += ` PCFR${pcfr.toFixed(1)}倍`;
+            }
+
+            // ROE = EPS ÷ BPS × 100
+            if(!Number.isNaN(bps) && bps !== 0){
+              const roe = (eps / bps) * 100;
+              line5 += ` ROE${roe.toFixed(1)}%`;
+            }
+
+            // 時価総額
+            const marketCap = shares * latestPrice;
+            const oku = Math.floor(marketCap / 100000000);
+            const chou = Math.floor(oku / 10000);
+            const remainOku = oku % 10000;
+
+            if(chou > 0){
+              line5 += ` 時価総額${chou}兆${remainOku}億円`;
+            }else{
+              line5 += ` 時価総額${oku}億円`;
             }
           }
         }
