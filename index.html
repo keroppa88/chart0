@@ -1799,21 +1799,14 @@ let infoY = pad.t + 45;
             if(!Number.isNaN(equityRatio)){
               line5 += ` 自己資本比率${(equityRatio * 100).toFixed(1)}%`;
             }
-          }
 
-          // キャッシュ・フロー
-          let cfParts = [];
-          const fmtOku = v => {
-            const a = Math.floor(v / 100000000);
-            return `${a}億`;
-          };
-          if(!Number.isNaN(cfo)) cfParts.push(`営業CF ${fmtOku(cfo)}円`);
-          if(!Number.isNaN(cfi)) cfParts.push(`投資CF ${fmtOku(cfi)}円`);
-          if(!Number.isNaN(cff)) cfParts.push(`財務CF ${fmtOku(cff)}円`);
-          if(cfParts.length > 0){
-            const cfLine = cfParts.join(' ');
-            if(line5) line5 += `  ${cfLine}`;
-            else line5 = cfLine;
+            // 株価CF倍率 = 株価 ÷ 一株当たりCF合計
+            const cfTotal = (Number.isNaN(cfo) ? 0 : cfo) + (Number.isNaN(cfi) ? 0 : cfi) + (Number.isNaN(cff) ? 0 : cff);
+            if(cfTotal !== 0){
+              const cfps = cfTotal / shares;
+              const pcfr = latestPrice / cfps;
+              line5 += ` PCFR${pcfr.toFixed(1)}倍`;
+            }
           }
         }
 
