@@ -87,7 +87,8 @@ async function updateAllFinance() {
     const newLine =
       (content.endsWith("\n") ? "" : "\n") +
       `${d.DiscDate},${d.DiscTime ?? ""},${code},` +
-      `${d.NP ?? ""},${d.EPS ?? ""},${d.BPS ?? ""},${d.FDivAnn ?? ""}\n`;
+      `${d.NP ?? ""},${d.EPS ?? ""},${d.BPS ?? ""},${d.FDivAnn ?? ""},` +
+      `${d.EqAR ?? ""},${d.CFO ?? ""},${d.CFI ?? ""},${d.CFF ?? ""}\n`;
 
     fs.appendFileSync(filePath, newLine);
     appended++;
