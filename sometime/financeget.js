@@ -143,24 +143,28 @@ if (!fs.existsSync(DATA_DIR)) {
  * 財務データをCSVに変換（V2 API対応）
  */
 function convertToCsv(data) {
-  const header = "DisclosedDate,DisclosedTime,LocalCode,Profit,EarningsPerShare,BookValuePerShare,ForecastDividendPerShareAnnual\n";
-  
+  const header = "DisclosedDate,DisclosedTime,LocalCode,Profit,EarningsPerShare,BookValuePerShare,ForecastDividendPerShareAnnual,EquityRatio,CashFlowOperating,CashFlowInvesting,CashFlowFinancing\n";
+
   const rows = data.map(d => {
     const disclosedDate = d.DiscDate || "";
     const disclosedTime = d.DiscTime || "";
-    
+
     // 5桁で末尾が0の場合は削除
     let localCode = d.Code || "";
     if (localCode.length === 5 && localCode.endsWith('0')) {
       localCode = localCode.slice(0, 4);
     }
-    
+
     const profit = d.NP || "";
     const earningsPerShare = d.EPS || "";
     const bookValuePerShare = d.BPS || "";
     const forecastDividend = d.FDivAnn || "";
-    
-    return `${disclosedDate},${disclosedTime},${localCode},${profit},${earningsPerShare},${bookValuePerShare},${forecastDividend}`;
+    const equityRatio = d.EqAR || "";
+    const cashFlowOperating = d.CFO || "";
+    const cashFlowInvesting = d.CFI || "";
+    const cashFlowFinancing = d.CFF || "";
+
+    return `${disclosedDate},${disclosedTime},${localCode},${profit},${earningsPerShare},${bookValuePerShare},${forecastDividend},${equityRatio},${cashFlowOperating},${cashFlowInvesting},${cashFlowFinancing}`;
   }).join("\n");
   
   return header + rows;

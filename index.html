@@ -1295,12 +1295,16 @@ async function loadFinancialData(code){
     
     const profit = toNum(cols[3]);
     const eps = toNum(cols[4]);
-    
+    const equityRatio = toNum(cols[7]);
+    const cfo = toNum(cols[8]);
+    const cfi = toNum(cols[9]);
+    const cff = toNum(cols[10]);
+
     if(Number.isNaN(profit) || Number.isNaN(eps) || eps === 0) return null;
-    
+
     const shares = profit / eps;
-    
-    return { eps, shares };
+
+    return { eps, shares, equityRatio, cfo, cfi, cff };
   }catch(e){
     console.log(`財務データ読み込みエラー (${code}):`, e);
     return null;
@@ -1769,7 +1773,7 @@ let infoY = pad.t + 45;
 
         let line5 = "";
         if(window.currentFinancialData && dailySeries && dailySeries.length > 0){
-          const { eps, shares } = window.currentFinancialData;
+          const { eps, shares, equityRatio, cfo, cfi, cff } = window.currentFinancialData;
           const latestPrice = dailySeries[dailySeries.length - 1].close;
 
           if(latestPrice && eps && shares){
@@ -1790,6 +1794,19 @@ let infoY = pad.t + 45;
             }
 
             line5 = `${perText} ${marketCapText}`;
+
+            // 自己資本比率
+            if(!Number.isNaN(equityRatio)){
+              line5 += ` 自己資本比率${(equityRatio * 100).toFixed(1)}%`;
+            }
+
+            // 株価CF倍率 = 株価 ÷ 一株当たりCF合計
+            const cfTotal = (Number.isNaN(cfo) ? 0 : cfo) + (Number.isNaN(cfi) ? 0 : cfi) + (Number.isNaN(cff) ? 0 : cff);
+            if(cfTotal !== 0){
+              const cfps = cfTotal / shares;
+              const pcfr = latestPrice / cfps;
+              line5 += ` PCFR${pcfr.toFixed(1)}倍`;
+            }
           }
         }
 
