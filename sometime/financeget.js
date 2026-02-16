@@ -9,6 +9,39 @@
 //期間指定できない？ようなので、取得情報から直近の●回分を取得。
 //コードは72030などとなってしまうので5桁時に末尾0なら削除して4桁化。
 //アクセスキー入れてローカル実施でも可。
+//●●financedata収集対象●●
+//Codestring,銘柄コード（5桁）, Code
+//CurFYEnstring,当事業年度終了日, CurFYEn
+//DiscDatestring,開示日, DiscDate
+//NxtFYEnstring,翌事業年度終了日, NxtFYEn
+//Salesnumber,売上高, Sales
+//OPnumber,営業利益, OP
+//OdPnumber,経常利益, OdP
+//NPnumber,当期純利益, NP
+//EPSnumber,一株あたり当期純利益, EPS
+//DEPSnumber,潜在株式調整後一株あたり当期純利益, DEPS
+//TAnumber,総資産, TA
+//Eqnumber,純資産, Eq
+//EqARnumber,自己資本比率, EqAR
+//BPSnumber,一株あたり純資産, BPS
+//CFOnumber,営業活動によるキャッシュ・フロー, CFO
+//CFInumber,投資活動によるキャッシュ・フロー, CFI
+//CFFnumber,財務活動によるキャッシュ・フロー, CFF
+//CashEqnumber,現金及び現金同等物期末残高, CashEq
+//DivAnnnumber,一株あたり配当実績_合計, DivAnn
+//FDivAnnnumber,一株あたり配当予想_合計, FDivAnn
+//FPayoutRatioAnnnumber,予想配当性向, FPayoutRatioAnn
+//FSalesnumber,売上高_予想_期末, FSales
+//FOPnumber,営業利益_予想_期末, FOP
+//FOdPnumber,経常利益_予想_期末, FOdP
+//FNPnumber,当期純利益_予想_期末, FNP
+//FEPSnumber,一株あたり当期純利益_予想_期末, FEPS
+//NxFSalesnumber,売上高_予想_翌事業年度期末, NxFSales
+//NxFOPnumber,営業利益_予想_翌事業年度期末, NxFOP
+//NxFOdPnumber,経常利益_予想_翌事業年度期末, NxFOdP
+//NxFNpnumber,当期純利益_予想_翌事業年度期末, NxFNp
+//NxFEPSnumber,一株あたり当期純利益_予想_翌事業年度期末, NxFEPS
+
 
 const https = require('https');
 const fs = require('fs');
