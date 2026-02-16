@@ -140,33 +140,50 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 /**
- * 財務データをCSVに変換（V2 API対応）
+ * APIから取得可能な全カラム定義
+ */
+const ALL_COLUMNS = [
+  "Code", "CurFYEn", "CurFYSt", "CurPerEn", "CurPerSt", "CurPerType",
+  "DiscDate", "DiscNo", "DiscTime", "DocType", "NxtFYSt", "NxtFYEn",
+  "Sales", "OP", "OdP", "NP", "EPS", "DEPS", "TA", "Eq", "EqAR", "BPS",
+  "CFO", "CFI", "CFF", "CashEq",
+  "Div1Q", "Div2Q", "Div3Q", "DivFY", "DivAnn", "DivUnit", "DivTotalAnn", "PayoutRatioAnn",
+  "FDiv1Q", "FDiv2Q", "FDiv3Q", "FDivFY", "FDivAnn", "FDivUnit", "FDivTotalAnn", "FPayoutRatioAnn",
+  "NxFDiv1Q", "NxFDiv2Q", "NxFDiv3Q", "NxFDivFY", "NxFDivAnn", "NxFDivUnit", "NxFPayoutRatioAnn",
+  "FSales2Q", "FOP2Q", "FOdP2Q", "FNP2Q", "FEPS2Q",
+  "NxFSales2Q", "NxFOP2Q", "NxFOdP2Q", "NxFNp2Q", "NxFEPS2Q",
+  "FSales", "FOP", "FOdP", "FNP", "FEPS",
+  "NxFSales", "NxFOP", "NxFOdP", "NxFNp", "NxFEPS",
+  "MatChgSub", "SigChgInC", "ChgByASRev", "ChgNoASRev", "ChgAcEst", "RetroRst",
+  "ShOutFY", "TrShFY", "AvgSh",
+  "NCSales", "NCOP", "NCOdP", "NCNP", "NCEPS", "NCTA", "NCEq", "NCEqAR", "NCBPS",
+  "FNCSales2Q", "FNCOP2Q", "FNCOdP2Q", "FNCNP2Q", "FNCEPS2Q",
+  "NxFNCSales2Q", "NxFNCOP2Q", "NxFNCOdP2Q", "NxFNCNP2Q", "NxFNCEPS2Q",
+  "FNCSales", "FNCOP", "FNCOdP", "FNCNP", "FNCEPS",
+  "NxFNCSales", "NxFNCOP", "NxFNCOdP", "NxFNCNP", "NxFNCEPS"
+];
+
+/**
+ * 財務データをCSVに変換（V2 API対応・全カラム出力）
  */
 function convertToCsv(data) {
-  const header = "DisclosedDate,DisclosedTime,LocalCode,Profit,EarningsPerShare,BookValuePerShare,ForecastDividendPerShareAnnual,EquityRatio,CashFlowOperating,CashFlowInvesting,CashFlowFinancing\n";
+  const header = ALL_COLUMNS.join(",") + "\n";
 
   const rows = data.map(d => {
-    const disclosedDate = d.DiscDate || "";
-    const disclosedTime = d.DiscTime || "";
-
-    // 5桁で末尾が0の場合は削除
-    let localCode = d.Code || "";
-    if (localCode.length === 5 && localCode.endsWith('0')) {
-      localCode = localCode.slice(0, 4);
-    }
-
-    const profit = d.NP || "";
-    const earningsPerShare = d.EPS || "";
-    const bookValuePerShare = d.BPS || "";
-    const forecastDividend = d.FDivAnn || "";
-    const equityRatio = d.EqAR || "";
-    const cashFlowOperating = d.CFO || "";
-    const cashFlowInvesting = d.CFI || "";
-    const cashFlowFinancing = d.CFF || "";
-
-    return `${disclosedDate},${disclosedTime},${localCode},${profit},${earningsPerShare},${bookValuePerShare},${forecastDividend},${equityRatio},${cashFlowOperating},${cashFlowInvesting},${cashFlowFinancing}`;
+    return ALL_COLUMNS.map(col => {
+      if (col === "Code") {
+        // 5桁で末尾が0の場合は削除して4桁化
+        let code = d.Code || "";
+        if (code.length === 5 && code.endsWith('0')) {
+          code = code.slice(0, 4);
+        }
+        return code;
+      }
+      const val = d[col];
+      return val !== undefined && val !== null ? val : "";
+    }).join(",");
   }).join("\n");
-  
+
   return header + rows;
 }
 
