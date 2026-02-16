@@ -140,33 +140,38 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 /**
- * 財務データをCSVに変換（V2 API対応）
+ * APIから取得可能な全カラム定義
+ */
+const ALL_COLUMNS = [
+  "Code", "CurFYEn", "DiscDate", "NxtFYEn",
+  "Sales", "OP", "OdP", "NP", "EPS", "DEPS", "TA", "Eq", "EqAR", "BPS",
+  "CFO", "CFI", "CFF", "CashEq",
+  "DivAnn", "FDivAnn", "FPayoutRatioAnn",
+  "FSales", "FOP", "FOdP", "FNP", "FEPS",
+  "NxFSales", "NxFOP", "NxFOdP", "NxFNp", "NxFEPS"
+];
+
+/**
+ * 財務データをCSVに変換（V2 API対応・全カラム出力）
  */
 function convertToCsv(data) {
-  const header = "DisclosedDate,DisclosedTime,LocalCode,Profit,EarningsPerShare,BookValuePerShare,ForecastDividendPerShareAnnual,EquityRatio,CashFlowOperating,CashFlowInvesting,CashFlowFinancing\n";
+  const header = ALL_COLUMNS.join(",") + "\n";
 
   const rows = data.map(d => {
-    const disclosedDate = d.DiscDate || "";
-    const disclosedTime = d.DiscTime || "";
-
-    // 5桁で末尾が0の場合は削除
-    let localCode = d.Code || "";
-    if (localCode.length === 5 && localCode.endsWith('0')) {
-      localCode = localCode.slice(0, 4);
-    }
-
-    const profit = d.NP || "";
-    const earningsPerShare = d.EPS || "";
-    const bookValuePerShare = d.BPS || "";
-    const forecastDividend = d.FDivAnn || "";
-    const equityRatio = d.EqAR || "";
-    const cashFlowOperating = d.CFO || "";
-    const cashFlowInvesting = d.CFI || "";
-    const cashFlowFinancing = d.CFF || "";
-
-    return `${disclosedDate},${disclosedTime},${localCode},${profit},${earningsPerShare},${bookValuePerShare},${forecastDividend},${equityRatio},${cashFlowOperating},${cashFlowInvesting},${cashFlowFinancing}`;
+    return ALL_COLUMNS.map(col => {
+      if (col === "Code") {
+        // 5桁で末尾が0の場合は削除して4桁化
+        let code = d.Code || "";
+        if (code.length === 5 && code.endsWith('0')) {
+          code = code.slice(0, 4);
+        }
+        return code;
+      }
+      const val = d[col];
+      return val !== undefined && val !== null ? val : "";
+    }).join(",");
   }).join("\n");
-  
+
   return header + rows;
 }
 
