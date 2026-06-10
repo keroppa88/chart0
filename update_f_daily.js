@@ -4,6 +4,8 @@
 // 銘柄未指定で全銘柄、当日分の発表のみを取得する。
 //financedataフォルダのcsvに照合して最終行に追記する
 //過去分は触らない（ベースCSV前提）
+//直近 BACKFILL_DAYS 日分（デフォルト5日）を古い順に処理し、
+//実行漏れ等で取りこぼした開示も自動補充する（同一開示日は既存スキップ）
 //収集カラムはfinanceget.jsのALL_COLUMNSと同一（31列）
 
 const fs = require("fs");
@@ -23,10 +25,15 @@ const ALL_COLUMNS = [
   "NxFSales", "NxFOP", "NxFOdP", "NxFNp", "NxFEPS"
 ];
 
-// JST 当日
-const TARGET_DATE = new Date(Date.now() + 9 * 60 * 60 * 1000)
-  .toISOString()
-  .slice(0, 10);
+// 取得する日数（今日を含む過去 N 暦日）
+const BACKFILL_DAYS = Math.max(1, parseInt(process.env.BACKFILL_DAYS || "5", 10));
+
+// JST の今日から i 日前の YYYY-MM-DD
+function jstDateMinus(i) {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000 - i * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+}
 
 // 5桁末尾0 → 4桁
 function normalizeCode(code) {
@@ -62,12 +69,8 @@ async function fetchFinanceByDate(date) {
   return all;
 }
 
-async function updateAllFinance() {
-  console.log(`${TARGET_DATE} の財務スナップショット取得開始…`);
-
-  const all = await fetchFinanceByDate(TARGET_DATE);
-  console.log(`API取得完了: ${all.length} 件`);
-
+// 1日分の取得結果をCSVへ反映する
+function applyFinanceDay(all, files, stats) {
   // Code -> 最新行
   const map = new Map();
   for (const d of all) {
@@ -75,14 +78,6 @@ async function updateAllFinance() {
     const code = normalizeCode(d.Code);
     map.set(code, d);
   }
-
-  const files = new Set(
-    fs.readdirSync(DATA_DIR).filter(f => f.endsWith(".csv")).map(f => path.basename(f, ".csv"))
-  );
-
-  let appended = 0;
-  let skipped = 0;
-  let created = 0;
 
   for (const [code, d] of map) {
     const filePath = path.join(DATA_DIR, `${code}.csv`);
@@ -98,7 +93,8 @@ async function updateAllFinance() {
       // 新規銘柄: ヘッダー付きで新規作成
       const header = ALL_COLUMNS.join(",");
       fs.writeFileSync(filePath, header + "\n" + row + "\n");
-      created++;
+      files.add(code);
+      stats.created++;
       continue;
     }
 
@@ -106,16 +102,34 @@ async function updateAllFinance() {
 
     // 既に同じ開示日があれば何もしない
     if (content.includes(d.DiscDate)) {
-      skipped++;
+      stats.skipped++;
       continue;
     }
 
     const newLine = (content.endsWith("\n") ? "" : "\n") + row + "\n";
     fs.appendFileSync(filePath, newLine);
-    appended++;
+    stats.appended++;
+  }
+}
+
+async function updateAllFinance() {
+  console.log(`過去 ${BACKFILL_DAYS} 日分の財務スナップショット取得開始…`);
+
+  const files = new Set(
+    fs.readdirSync(DATA_DIR).filter(f => f.endsWith(".csv")).map(f => path.basename(f, ".csv"))
+  );
+
+  const stats = { appended: 0, created: 0, skipped: 0 };
+
+  // 古い順に処理（追記順がCSV内で日付順になるように）
+  for (let i = BACKFILL_DAYS - 1; i >= 0; i--) {
+    const date = jstDateMinus(i);
+    const all = await fetchFinanceByDate(date);
+    console.log(`${date}: API取得 ${all.length} 件`);
+    applyFinanceDay(all, files, stats);
   }
 
-  console.log(`✅ 完了: 追記 ${appended}, 新規 ${created}, 既存 ${skipped}`);
+  console.log(`✅ 完了: 追記 ${stats.appended}, 新規 ${stats.created}, 既存 ${stats.skipped}`);
 }
 
 updateAllFinance().catch((e) => {
