@@ -69,19 +69,23 @@ async function fetchAll(apiCode) {
 }
 
 async function fetchAndSave(code) {
+    // API側は普通株が5桁(末尾0)、ローカルのCSVは4桁。
+    // どちらで入力されてもAPIには5桁、ファイル名は4桁を使う。
+    const apiCode = code.length === 4 ? `${code}0` : code;
+    const fileCode = code.length === 5 && code.endsWith("0") ? code.slice(0, 4) : code;
     try {
-        let allData = await fetchAll(code);
+        let allData = await fetchAll(apiCode);
 
-        // API側は普通株が5桁(末尾0)のため、4桁指定で0件なら末尾0を付けて再試行
-        if (allData.length === 0 && code.length === 4) {
-            console.log(`  ${code}: 0件のため ${code}0 で再試行`);
-            allData = await fetchAll(`${code}0`);
+        // 5桁でヒットしない銘柄(指数等)のために入力コードそのままでも再試行
+        if (allData.length === 0 && apiCode !== code) {
+            console.log(`  ${apiCode}: 0件のため ${code} で再試行`);
+            allData = await fetchAll(code);
         }
 
         if (allData.length > 0) {
             const csvContent = convertToCsv(allData);
-            fs.writeFileSync(path.join(DATA_DIR, `${code}.csv`), csvContent);
-            console.log(`✅成功: ${code}.csv (${allData.length}件)`);
+            fs.writeFileSync(path.join(DATA_DIR, `${fileCode}.csv`), csvContent);
+            console.log(`✅成功: ${fileCode}.csv (${allData.length}件)`);
         } else {
             console.warn(`⚠データ0件: ${code}`);
         }
