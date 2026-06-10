@@ -21,6 +21,12 @@ if (TARGET_STOCKS.length === 0) {
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+// 取得開始日: 実行日から過去5年（J-Quants Lightプランの提供範囲。
+// 提供範囲より古くてもAPIはある分だけ返すので厳密でなくてよい）
+const FROM_DATE = new Date(Date.now() + 9 * 60 * 60 * 1000 - 5 * 365 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
 function convertToCsv(data) {
     const header = "Date,Open,High,Low,Close,Volume,TradingValue,UpLimit,UnderLimit\n";
     const rows = data.map(d => {
@@ -47,7 +53,7 @@ async function fetchAndSave(code) {
         do {
             const params = new URLSearchParams({
                 code: code,
-                from: "2021-01-25",
+                from: FROM_DATE,
             });
             if (paginationKey) params.set("pagination_key", paginationKey);
 
