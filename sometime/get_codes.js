@@ -1,0 +1,88 @@
+// 指定した銘柄コードのみ全履歴を取得して data/コード.csv に保存する。
+// 使い方: CODES="7485,1234" node sometime/get_codes.js
+// （allchartlistに登録済みなのにCSVが無い銘柄の補修用。ロジックは get.js と同一）
+
+const fs = require('fs');
+const path = require('path');
+
+const API_KEY = process.env.JQUANTS_API_KEY;
+const API_URL = "https://api.jquants.com/v2";
+const DATA_DIR = path.join(__dirname, '..', 'data');
+
+const TARGET_STOCKS = (process.env.CODES || "")
+    .split(/[,\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+if (TARGET_STOCKS.length === 0) {
+    console.error("CODES 環境変数に銘柄コードを指定してください（例: CODES=7485）");
+    process.exit(1);
+}
+
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+function convertToCsv(data) {
+    const header = "Date,Open,High,Low,Close,Volume,TradingValue,UpLimit,UnderLimit\n";
+    const rows = data.map(d => {
+        const date = d.Date || "";
+        const open = d.AdjO || "0";
+        const high = d.AdjH || "0";
+        const low = d.AdjL || "0";
+        const close = d.AdjC || "0";
+        const volume = d.AdjVo || "0";
+        const tradingValue = d.Va || "0";
+        const upLimit = d.UL || "0";
+        const underLimit = d.LL || "0";
+
+        return `${date},${open},${high},${low},${close},${volume},${tradingValue},${upLimit},${underLimit}`;
+    }).join("\n");
+    return header + rows;
+}
+
+async function fetchAndSave(code) {
+    let allData = [];
+    let paginationKey = "";
+
+    try {
+        do {
+            const params = new URLSearchParams({
+                code: code,
+                from: "2021-01-25",
+            });
+            if (paginationKey) params.set("pagination_key", paginationKey);
+
+            const res = await fetch(`${API_URL}/equities/bars/daily?${params}`, {
+                headers: { "x-api-key": API_KEY }
+            });
+
+            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+
+            const body = await res.json();
+            allData = allData.concat(body.data || []);
+            paginationKey = body.pagination_key || "";
+        } while (paginationKey);
+
+        if (allData.length > 0) {
+            const csvContent = convertToCsv(allData);
+            fs.writeFileSync(path.join(DATA_DIR, `${code}.csv`), csvContent);
+            console.log(`✅成功: ${code}.csv (${allData.length}件)`);
+        } else {
+            console.warn(`⚠データ0件: ${code}`);
+        }
+    } catch (e) {
+        console.error(`❌エラー ${code}:`, e.message);
+        process.exitCode = 1;
+    }
+}
+
+async function main() {
+    console.log(`データ取得を開始します: ${TARGET_STOCKS.join(", ")}`);
+    for (const code of TARGET_STOCKS) {
+        await fetchAndSave(code);
+        // レートリミット（Lightプラン: 60req/分）を考慮して1秒待機
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    console.log("すべての処理が完了しました。");
+}
+
+main();
