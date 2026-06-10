@@ -2004,27 +2004,32 @@ let displayCompareSeries = [];
   const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleCandles.length);
   const getY = (val) => pad.t + chartH - (val - minP) * scaleY;
 
-  const roundPrice = (price) => {
-    if(price < 1000) return Math.round(price / 10) * 10;
-    if(price < 3000) return Math.round(price / 50) * 50;
-    if(price < 5000) return Math.round(price / 100) * 100;
-    return Math.round(price / 500) * 500;
+  // キリのいい刻み幅（1-2-5系列）を求め、その価格位置にグリッド線を引く
+  const niceStep = (range, targetSteps) => {
+    const rough = range / targetSteps;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const r = rough / mag;
+    const mult = r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10;
+    return mult * mag;
   };
 
-  ctx.strokeStyle = '#eee'; 
+  ctx.strokeStyle = '#eee';
   ctx.lineWidth = 1;
   const gridSteps = 5;
-  for(let i = 0; i <= gridSteps; i++){
-    const y = pad.t + (chartH * i / gridSteps);
-    const rawPrice = maxP - (maxP - minP) * (i / gridSteps);
-    const price = roundPrice(rawPrice);
-    ctx.beginPath(); 
-    ctx.moveTo(pad.l, y); 
-    ctx.lineTo(w - pad.r, y); 
+  const tickStep = niceStep(maxP - minP, gridSteps);
+  const firstTick = Math.ceil(minP / tickStep) * tickStep;
+  for(let t = firstTick; t <= maxP + tickStep * 1e-6; t += tickStep){
+    const y = getY(t);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(w - pad.r, y);
     ctx.stroke();
-    ctx.fillStyle = '#666'; 
+    ctx.fillStyle = '#666';
     ctx.textAlign = 'left';
-    ctx.fillText(price.toLocaleString(), w - pad.r + 5, y + 4);
+    // 刻み幅に応じた桁数で表示（浮動小数点誤差を丸める）
+    const decimals = tickStep >= 1 ? 0 : Math.min(4, Math.ceil(-Math.log10(tickStep)));
+    const label = Number(t.toFixed(decimals));
+    ctx.fillText(label.toLocaleString(), w - pad.r + 5, y + 4);
   }
 
   mainCanvas.candlePositions = visibleCandles.map((c, i) => ({
