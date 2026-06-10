@@ -45,33 +45,47 @@ function convertToCsv(data) {
     return header + rows;
 }
 
-async function fetchAndSave(code) {
+async function fetchAll(apiCode) {
     let allData = [];
     let paginationKey = "";
+    do {
+        const params = new URLSearchParams({
+            code: apiCode,
+            from: FROM_DATE,
+        });
+        if (paginationKey) params.set("pagination_key", paginationKey);
 
+        const res = await fetch(`${API_URL}/equities/bars/daily?${params}`, {
+            headers: { "x-api-key": API_KEY }
+        });
+
+        if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+
+        const body = await res.json();
+        allData = allData.concat(body.data || []);
+        paginationKey = body.pagination_key || "";
+    } while (paginationKey);
+    return allData;
+}
+
+async function fetchAndSave(code) {
+    // API側は普通株が5桁(末尾0)、ローカルのCSVは4桁。
+    // どちらで入力されてもAPIには5桁、ファイル名は4桁を使う。
+    const apiCode = code.length === 4 ? `${code}0` : code;
+    const fileCode = code.length === 5 && code.endsWith("0") ? code.slice(0, 4) : code;
     try {
-        do {
-            const params = new URLSearchParams({
-                code: code,
-                from: FROM_DATE,
-            });
-            if (paginationKey) params.set("pagination_key", paginationKey);
+        let allData = await fetchAll(apiCode);
 
-            const res = await fetch(`${API_URL}/equities/bars/daily?${params}`, {
-                headers: { "x-api-key": API_KEY }
-            });
-
-            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-
-            const body = await res.json();
-            allData = allData.concat(body.data || []);
-            paginationKey = body.pagination_key || "";
-        } while (paginationKey);
+        // 5桁でヒットしない銘柄(指数等)のために入力コードそのままでも再試行
+        if (allData.length === 0 && apiCode !== code) {
+            console.log(`  ${apiCode}: 0件のため ${code} で再試行`);
+            allData = await fetchAll(code);
+        }
 
         if (allData.length > 0) {
             const csvContent = convertToCsv(allData);
-            fs.writeFileSync(path.join(DATA_DIR, `${code}.csv`), csvContent);
-            console.log(`✅成功: ${code}.csv (${allData.length}件)`);
+            fs.writeFileSync(path.join(DATA_DIR, `${fileCode}.csv`), csvContent);
+            console.log(`✅成功: ${fileCode}.csv (${allData.length}件)`);
         } else {
             console.warn(`⚠データ0件: ${code}`);
         }

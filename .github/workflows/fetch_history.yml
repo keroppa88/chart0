@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       codes:
-        description: '取得する銘柄コード（カンマ区切り。例: 7485,1234）'
+        description: '取得する銘柄コード（カンマ区切り。例: 74850,12340 ※API用5桁。4桁でも自動で末尾0を補完）'
         required: true
 permissions:
   contents: write
