@@ -45,28 +45,38 @@ function convertToCsv(data) {
     return header + rows;
 }
 
-async function fetchAndSave(code) {
+async function fetchAll(apiCode) {
     let allData = [];
     let paginationKey = "";
+    do {
+        const params = new URLSearchParams({
+            code: apiCode,
+            from: FROM_DATE,
+        });
+        if (paginationKey) params.set("pagination_key", paginationKey);
 
+        const res = await fetch(`${API_URL}/equities/bars/daily?${params}`, {
+            headers: { "x-api-key": API_KEY }
+        });
+
+        if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
+
+        const body = await res.json();
+        allData = allData.concat(body.data || []);
+        paginationKey = body.pagination_key || "";
+    } while (paginationKey);
+    return allData;
+}
+
+async function fetchAndSave(code) {
     try {
-        do {
-            const params = new URLSearchParams({
-                code: code,
-                from: FROM_DATE,
-            });
-            if (paginationKey) params.set("pagination_key", paginationKey);
+        let allData = await fetchAll(code);
 
-            const res = await fetch(`${API_URL}/equities/bars/daily?${params}`, {
-                headers: { "x-api-key": API_KEY }
-            });
-
-            if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-
-            const body = await res.json();
-            allData = allData.concat(body.data || []);
-            paginationKey = body.pagination_key || "";
-        } while (paginationKey);
+        // API側は普通株が5桁(末尾0)のため、4桁指定で0件なら末尾0を付けて再試行
+        if (allData.length === 0 && code.length === 4) {
+            console.log(`  ${code}: 0件のため ${code}0 で再試行`);
+            allData = await fetchAll(`${code}0`);
+        }
 
         if (allData.length > 0) {
             const csvContent = convertToCsv(allData);
