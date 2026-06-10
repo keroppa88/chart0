@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '40 7 * * 1-5' # 日本時間16:40（UTC 7:40）
   workflow_dispatch:
+    inputs:
+      backfill_days:
+        description: '取得する過去日数（欠損補修時に大きくする。例: 16）'
+        required: false
+        default: '5'
 permissions:
   contents: write
 jobs:
@@ -19,6 +24,7 @@ jobs:
         run: node update_daily.js
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          BACKFILL_DAYS: ${{ inputs.backfill_days || '5' }}
 
      
       # 財務情報更新
@@ -26,6 +32,7 @@ jobs:
         run: node update_f_daily.js
         env:
           JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          BACKFILL_DAYS: ${{ inputs.backfill_days || '5' }}
 
       # コミット＆プッシュ
       - name: Commit and Push
