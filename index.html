@@ -160,8 +160,8 @@
     <!-- グループ2: 比較、価格帯別出来高、VWAP、日付ライン -->
     <div class="legend-group">
       <label style="display:flex; align-items:center; gap:2px; cursor:pointer;">
-        <input type="checkbox" id="financialInfoCheck1" checked>
-        <input type="checkbox" id="financialInfoCheck2" checked>
+        <input type="checkbox" id="financialInfoCheck1">
+        <input type="checkbox" id="financialInfoCheck2">
         <span>情報</span>
       </label>
       
@@ -450,8 +450,8 @@ let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
 let dateLineEnabled = false;
 let volumeProfileEnabled = false; // 追加（将来用）
-let showFinancialInfo1 = true; // ①＋寄・－寄の日中騰落率
-let showFinancialInfo2 = true; // ②勝率、PER、時価総額
+let showFinancialInfo1 = false; // ①＋寄・－寄の日中騰落率
+let showFinancialInfo2 = false; // ②勝率、PER、時価総額（ON時のみ財務CSVを読む）
   
 /* =========================
    Data Version
@@ -1618,12 +1618,14 @@ async function applySymbol(){
   dailySeries = await loadSymbolCSV(code);
   updateTimeframeSeries();
 
-  // 財務情報を読み込み（エラーでも処理を継続）
-  try{
-    window.currentFinancialData = await loadFinancialData(code);
-  }catch(e){
-    console.log('財務データ読み込み失敗:', e);
-    window.currentFinancialData = null;
+  // 財務情報は情報②チェックON時のみ読み込み（OFF時はfetchを省略して高速化）
+  window.currentFinancialData = null;
+  if(showFinancialInfo2){
+    try{
+      window.currentFinancialData = await loadFinancialData(code);
+    }catch(e){
+      console.log('財務データ読み込み失敗:', e);
+    }
   }
   
   offsetX = 0;
@@ -3155,8 +3157,19 @@ function setupEventListeners(){
     drawChart();
   });
 
-  document.getElementById('financialInfoCheck2')?.addEventListener('change', (e) => {
+  document.getElementById('financialInfoCheck2')?.addEventListener('change', async (e) => {
     showFinancialInfo2 = e.target.checked;
+    // ONにした時点で現在銘柄の財務を読み込んでから再描画
+    if(showFinancialInfo2 && !window.currentFinancialData){
+      const code = document.getElementById('symbolSelect')?.value;
+      if(code){
+        try{
+          window.currentFinancialData = await loadFinancialData(code);
+        }catch(_){
+          window.currentFinancialData = null;
+        }
+      }
+    }
     drawChart();
   });
 
