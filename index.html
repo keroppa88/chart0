@@ -1293,12 +1293,14 @@ async function loadFinancialData(code){
     const lastLine = lines[lines.length - 1];
     const cols = lastLine.split(',').map(s => s.trim());
 
-    const profit = toNum(cols[3]);
-    const eps = toNum(cols[4]);
-    const equityRatio = toNum(cols[7]);
-    const cfo = toNum(cols[8]);
-    const cfi = toNum(cols[9]);
-    const cff = toNum(cols[10]);
+    // 列: 0:Code 1:CurFYEn 2:DiscDate 3:NxtFYEn 4:Sales 5:OP 6:OdP 7:NP
+    //     8:EPS 9:DEPS 10:TA 11:Eq 12:EqAR 13:BPS 14:CFO 15:CFI 16:CFF
+    const profit = toNum(cols[7]);
+    const eps = toNum(cols[8]);
+    const equityRatio = toNum(cols[12]);
+    const cfo = toNum(cols[14]);
+    const cfi = toNum(cols[15]);
+    const cff = toNum(cols[16]);
 
     if(Number.isNaN(profit) || Number.isNaN(eps) || eps === 0) return null;
 
@@ -1308,7 +1310,7 @@ async function loadFinancialData(code){
     let bps = NaN;
     for(let i = lines.length - 1; i >= 1; i--){
       const c = lines[i].split(',').map(s => s.trim());
-      const v = toNum(c[5]);
+      const v = toNum(c[13]); // BPS
       if(!Number.isNaN(v)){
         bps = v;
         break;
