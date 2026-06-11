@@ -1616,12 +1616,37 @@ function updateViewInfo(){
   el.textContent = `${timeframeLabel} 表示本数: ${displayCount} / 表示範囲: ${startDate && endDate ? `${startDate} ~ ${endDate}` : '-'}`;
 }
 
+// 銘柄切り替え音「カッ」(OscillatorNode合成、音源ファイル不要)
+let switchAudioCtx = null;
+function playSwitchSound(){
+  try{
+    if(!switchAudioCtx) switchAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = switchAudioCtx;
+    if(ctx.state === 'suspended') ctx.resume();
+    const t = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    // 高めの音程を一気に落として乾いた「カッ」にする
+    osc.frequency.setValueAtTime(1100, t);
+    osc.frequency.exponentialRampToValueAtTime(450, t + 0.03);
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.07);
+  }catch(e){ /* 音が出せない環境では無視 */ }
+}
+
 async function applySymbol(){
   const symbolSelect = document.getElementById('symbolSelect');
   const code = symbolSelect?.value;
-  
+
   if(!code) return;
-  
+
+  playSwitchSound();
+
   const selectedOption = symbolSelect?.selectedOptions?.[0];
   currentSymbolDisplay = selectedOption?.textContent || code;
   
