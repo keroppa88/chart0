@@ -1616,8 +1616,9 @@ function updateViewInfo(){
   el.textContent = `${timeframeLabel} 表示本数: ${displayCount} / 表示範囲: ${startDate && endDate ? `${startDate} ~ ${endDate}` : '-'}`;
 }
 
-// 銘柄切り替え音「カッ」(OscillatorNode合成、音源ファイル不要)
+// 銘柄切り替え音「カッ」(ノイズバースト合成、音源ファイル不要)
 let switchAudioCtx = null;
+let switchNoiseBuf = null;
 function playSwitchSound(){
   try{
     if(!switchAudioCtx) switchAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1625,17 +1626,26 @@ function playSwitchSound(){
     if(ctx.state === 'suspended') ctx.resume();
     const t = ctx.currentTime;
 
-    const osc = ctx.createOscillator();
+    // 30msのホワイトノイズ(初回のみ生成して使い回す)
+    if(!switchNoiseBuf){
+      switchNoiseBuf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.03), ctx.sampleRate);
+      const ch = switchNoiseBuf.getChannelData(0);
+      for(let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    }
+
+    // ノイズをバンドパスに通して超短く減衰させ、乾いた「カッ」にする
+    const src = ctx.createBufferSource();
+    src.buffer = switchNoiseBuf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 2500;
+    bp.Q.value = 1.2;
     const gain = ctx.createGain();
-    osc.type = 'square';
-    // 高めの音程を一気に落として乾いた「カッ」にする
-    osc.frequency.setValueAtTime(1100, t);
-    osc.frequency.exponentialRampToValueAtTime(450, t + 0.03);
-    gain.gain.setValueAtTime(0.25, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(t);
-    osc.stop(t + 0.07);
+    gain.gain.setValueAtTime(0.5, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.025);
+    src.connect(bp).connect(gain).connect(ctx.destination);
+    src.start(t);
+    src.stop(t + 0.03);
   }catch(e){ /* 音が出せない環境では無視 */ }
 }
 
