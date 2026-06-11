@@ -161,8 +161,11 @@
     <div class="legend-group">
       <label style="display:flex; align-items:center; gap:2px; cursor:pointer;">
         <input type="checkbox" id="financialInfoCheck1">
+        <span>騰落</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:2px; cursor:pointer;">
         <input type="checkbox" id="financialInfoCheck2">
-        <span>情報</span>
+        <span>財務</span>
       </label>
       
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
@@ -460,8 +463,8 @@ let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
 let dateLineEnabled = false;
 let volumeProfileEnabled = false; // 追加（将来用）
-let showFinancialInfo1 = false; // ①＋寄・－寄の日中騰落率
-let showFinancialInfo2 = false; // ②勝率、PER、時価総額（ON時のみ財務CSVを読む）
+let showFinancialInfo1 = false; // 騰落: 勝率、＋寄・－寄の日中騰落率
+let showFinancialInfo2 = false; // 財務: PER、PBR、時価総額など（ON時のみ財務CSVを読む）
   
 /* =========================
    Data Version
@@ -1663,7 +1666,7 @@ async function applySymbol(){
   dailySeries = await loadSymbolCSV(code);
   updateTimeframeSeries();
 
-  // 財務情報は情報②チェックON時のみ読み込み（OFF時はfetchを省略して高速化）
+  // 財務情報は財務チェックON時のみ読み込み（OFF時はfetchを省略して高速化）
   window.currentFinancialData = null;
   if(showFinancialInfo2){
     try{
@@ -1825,12 +1828,23 @@ function drawMain(visibleCandles, visibleIndices){
 
 let infoY = pad.t + 45;
 
-      // ②勝率、PER、時価総額
-      if(showFinancialInfo2){
+      // ①騰落: 勝率、＋寄・－寄の日中騰落率
+      if(showFinancialInfo1){
         const line2 = `勝率${fmtPct(winRate)}（上昇時平均${fmtAvg(upAvg)}、下落時平均${fmtAvg(downAvg)}）`;
         ctx.fillText(line2, pad.l + 5, infoY);
         infoY += 20;
 
+        const line3 = `＋寄･日中騰落率${fmtAvg(plusOpenOcPct)}（＋時(${fmtPct(plusOpenPosRate)})${fmtAvg(plusOpenPosAvg)}、－時(${fmtPct(plusOpenNegRate)})${fmtAvg(plusOpenNegAvg)}）`;
+        ctx.fillText(line3, pad.l + 5, infoY);
+        infoY += 20;
+
+        const line4 = `－寄･日中騰落率${fmtAvg(minusOpenOcPct)}（＋時(${fmtPct(minusOpenPosRate)})${fmtAvg(minusOpenPosAvg)}、－時(${fmtPct(minusOpenNegRate)})${fmtAvg(minusOpenNegAvg)}）`;
+        ctx.fillText(line4, pad.l + 5, infoY);
+        infoY += 20;
+      }
+
+      // ②財務: PER、PBR、時価総額など（財務データが無ければ何も表示しない）
+      if(showFinancialInfo2){
         let line5 = "";
         if(window.currentFinancialData && dailySeries && dailySeries.length > 0){
           const { eps, shares, cfo, cfi, cff, bps } = window.currentFinancialData;
@@ -1881,16 +1895,6 @@ let infoY = pad.t + 45;
         }
       }
 
-      // ①＋寄・－寄の日中騰落率
-      if(showFinancialInfo1){
-        const line3 = `＋寄･日中騰落率${fmtAvg(plusOpenOcPct)}（＋時(${fmtPct(plusOpenPosRate)})${fmtAvg(plusOpenPosAvg)}、－時(${fmtPct(plusOpenNegRate)})${fmtAvg(plusOpenNegAvg)}）`;
-        ctx.fillText(line3, pad.l + 5, infoY);
-        infoY += 20;
-
-        const line4 = `－寄･日中騰落率${fmtAvg(minusOpenOcPct)}（＋時(${fmtPct(minusOpenPosRate)})${fmtAvg(minusOpenPosAvg)}、－時(${fmtPct(minusOpenNegRate)})${fmtAvg(minusOpenNegAvg)}）`;
-        ctx.fillText(line4, pad.l + 5, infoY);
-        infoY += 20;
-      }
     }
     
     ctx.restore();
