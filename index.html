@@ -71,6 +71,25 @@
     .indicator-canvas { height:100%; width:100%; }
 
     .tooltip { position:absolute; background:rgba(255,255,255,0.95); border:1px solid #999; padding:8px; border-radius:4px; font-size:12px; pointer-events:none; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:100; line-height:1.4; white-space:nowrap; }
+
+    /* === 配色テーマ: 黒 === */
+    body.theme-dark { background:#141414; color:#cccccc; }
+    body.theme-dark .container { background:#000000; box-shadow:none; }
+    body.theme-dark #mainChart { border-color:#333333; }
+    body.theme-dark .indicator-container { background:#000000; border-color:#333333; }
+    body.theme-dark .param-group { background:#1e1e1e; border-color:#333333; color:#cccccc; }
+    body.theme-dark .param-group select { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
+    body.theme-dark .param-group input { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
+    body.theme-dark select#compareSymbolSelect { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
+    /* === 配色テーマ: 紺 === */
+    body.theme-navy { background:#08142e; color:#cdd8ef; }
+    body.theme-navy .container { background:#0d1b3a; box-shadow:none; }
+    body.theme-navy #mainChart { border-color:#24376b; }
+    body.theme-navy .indicator-container { background:#0d1b3a; border-color:#24376b; }
+    body.theme-navy .param-group { background:#13244f; border-color:#24376b; color:#cdd8ef; }
+    body.theme-navy .param-group select { background:#16294f; color:#e3ebfb; border-color:#2c4274; }
+    body.theme-navy .param-group input { background:#16294f; color:#e3ebfb; border-color:#2c4274; }
+    body.theme-navy select#compareSymbolSelect { background:#16294f; color:#e3ebfb; border-color:#2c4274; }
   </style>
 </head>
 <body>
@@ -79,6 +98,7 @@
   <div class="title-row">
     <h1>爆速チャートくん</h1>
     <button id="helpBtn" class="help-btn" type="button">説明</button>
+    <button id="colorBtn" class="help-btn" type="button" title="背景色を切り替え（通常→黒→紺）">色</button>
     <button id="prevStockBtn" class="arrow-btn" type="button" title="前の銘柄（←）">◀</button>
     <button id="nextStockBtn" class="arrow-btn" type="button" title="次の銘柄（→）">▶</button>
   </div>
@@ -368,6 +388,28 @@
     </div>
 
 <script>
+
+// === 配色テーマ（背景: 通常→黒→紺 を循環） ===
+const THEMES = {
+  normal: { canvasBg:null,      grid:'#eee',     gridStrong:'#e0e0e0', axis:'#ccc',    neutral:'#999',    label:'#666',    name:'#acacac', nameFaint:'rgba(172,172,172,0.4)', donchian:'#000',    volProfile:'#E0EBEB' },
+  dark:   { canvasBg:'#000000', grid:'#222222', gridStrong:'#2b2b2b', axis:'#3a3a3a', neutral:'#888888', label:'#9a9a9a', name:'#8a8a8a', nameFaint:'rgba(140,140,140,0.4)', donchian:'#d0d0d0', volProfile:'rgba(110,130,130,0.35)' },
+  navy:   { canvasBg:'#0d1b3a', grid:'#16264d', gridStrong:'#1d2f5c', axis:'#27396b', neutral:'#7184b3', label:'#9fb0d8', name:'#8294c0', nameFaint:'rgba(130,148,192,0.4)', donchian:'#d6e0f5', volProfile:'rgba(80,110,170,0.30)' },
+};
+const THEME_ORDER = ['normal', 'dark', 'navy'];
+let themeIndex = 0;
+function T(){ return THEMES[THEME_ORDER[themeIndex]]; }
+function applyTheme(){
+  const name = THEME_ORDER[themeIndex];
+  document.body.classList.remove('theme-dark', 'theme-navy');
+  if(name === 'dark') document.body.classList.add('theme-dark');
+  else if(name === 'navy') document.body.classList.add('theme-navy');
+  if(typeof drawChart === 'function') drawChart();
+}
+function cycleTheme(){
+  themeIndex = (themeIndex + 1) % THEME_ORDER.length;
+  applyTheme();
+}
+
 /* =========================
    State
 ========================= */
@@ -1754,7 +1796,7 @@ function drawChart(){
   if(!series || series.length === 0){
     resetBackBuffers();
     mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
-    mainCtx.fillStyle = '#666';
+    mainCtx.fillStyle = T().label;
     mainCtx.textAlign = 'center';
     mainCtx.fillText("No Data", mainCanvas.width / 2, mainCanvas.height / 2);
     return;
@@ -1781,6 +1823,7 @@ function drawMain(visibleCandles, visibleIndices){
   const chartH = h - pad.t - pad.b;
 
   ctx.clearRect(0, 0, w, h);
+  if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
 
   if(currentSymbolDisplay){
     ctx.save();
@@ -1789,18 +1832,18 @@ function drawMain(visibleCandles, visibleIndices){
     
     if(compareEnabled && compareSymbolCode){
       ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      ctx.fillStyle = '#acacac';
+      ctx.fillStyle = T().name;
       ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
       
       const mainWidth = ctx.measureText(currentSymbolDisplay).width;
       const spaceWidth = ctx.measureText('　').width;
       
-      ctx.fillStyle = 'rgba(172, 172, 172, 0.4)';
+      ctx.fillStyle = T().nameFaint;
       ctx.fillText(compareSymbolName, pad.l + 5 + mainWidth + spaceWidth, pad.t + 5);
 
       const correlation = calcCorrelationForVisibleWindow();
       const correlationText = correlation == null ? '相関係数-' : `相関係数${correlation.toFixed(2)}`;
-      ctx.fillStyle = '#acacac';
+      ctx.fillStyle = T().name;
       ctx.font = '27px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillText(correlationText, pad.l + 5, pad.t + 45);
     }else{
@@ -1817,12 +1860,12 @@ function drawMain(visibleCandles, visibleIndices){
 
       const timeframeLabel = timeframe === 'daily' ? '（日足）' : timeframe === 'weekly' ? '（週足）' : '（月足）';
       
-      ctx.fillStyle = '#acacac';
+      ctx.fillStyle = T().name;
       ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillText(currentSymbolDisplay, pad.l + 5, pad.t + 5);
       
       const nameWidth = ctx.measureText(currentSymbolDisplay).width;
-      ctx.fillStyle = '#acacac';
+      ctx.fillStyle = T().name;
       ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
       ctx.fillText(`${timeframeLabel}騰落率${fmtAvg(totalReturn)}`, pad.l + 5 + nameWidth + 10, pad.t + 20);
 
@@ -2041,7 +2084,7 @@ let displayCompareSeries = [];
   }
 
   if(minP === Infinity){
-    ctx.fillStyle = '#666'; 
+    ctx.fillStyle = T().label; 
     ctx.textAlign = 'center'; 
     ctx.fillText("No Data", w / 2, h / 2);
     return;
@@ -2066,7 +2109,7 @@ let displayCompareSeries = [];
     return mult * mag;
   };
 
-  ctx.strokeStyle = '#eee';
+  ctx.strokeStyle = T().grid;
   ctx.lineWidth = 1;
   const gridSteps = 5;
   const tickStep = niceStep(maxP - minP, gridSteps);
@@ -2077,7 +2120,7 @@ let displayCompareSeries = [];
     ctx.moveTo(pad.l, y);
     ctx.lineTo(w - pad.r, y);
     ctx.stroke();
-    ctx.fillStyle = '#666';
+    ctx.fillStyle = T().label;
     ctx.textAlign = 'left';
     // 刻み幅に応じた桁数で表示（浮動小数点誤差を丸める）
     const decimals = tickStep >= 1 ? 0 : Math.min(4, Math.ceil(-Math.log10(tickStep)));
@@ -2272,7 +2315,7 @@ let displayCompareSeries = [];
 
   if(dateLineEnabled){
     ctx.save();
-    ctx.strokeStyle = '#e0e0e0';
+    ctx.strokeStyle = T().gridStrong;
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
     
@@ -2286,7 +2329,7 @@ let displayCompareSeries = [];
     ctx.restore();
   }
   
-  ctx.fillStyle = '#999';
+  ctx.fillStyle = T().neutral;
   ctx.textAlign = 'center';
   datePositions.forEach((pos, idx) => {
     ctx.fillText(dateLabels[idx], getX(pos), h - 5);
@@ -2301,7 +2344,7 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
     const maxBarWidth = chartW * 0.5; // チャート幅の50%が最大
     
     ctx.save();
-    ctx.fillStyle = '#E0EBEB';
+    ctx.fillStyle = T().volProfile;
     
     for(let i = 0; i < volumeProfile.bins; i++){
       const vol = volumeProfile.profile[i];
@@ -2427,9 +2470,9 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
     }
 
     if(params.dochianEnabled && params.dochian > 0){
-      drawLine(indicators.dochian.high, '#000', 0.8);
-      drawLine(indicators.dochian.low, '#000', 0.8);
-      drawLine(indicators.dochian.mid, '#000', 0.8);
+      drawLine(indicators.dochian.high, T().donchian, 0.8);
+      drawLine(indicators.dochian.low, T().donchian, 0.8);
+      drawLine(indicators.dochian.mid, T().donchian, 0.8);
     }
 
     if(params.keltnerEnabled && params.keltner > 0){
@@ -2448,6 +2491,7 @@ function drawVolume(visibleCandles, visibleIndices){
   const chartW = w - pad.l - pad.r;
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
+  if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
 
   let maxVol = 0;
   visibleCandles.forEach(c => {
@@ -2469,7 +2513,7 @@ function drawVolume(visibleCandles, visibleIndices){
     const y = getY(c.volume);
     const y0 = pad.t + chartH;
 
-    let color = '#999';
+    let color = T().neutral;
     if(c.open != null && c.close != null){
       color = c.close >= c.open ? '#26a69a' : '#ef5350';
     }
@@ -2478,7 +2522,7 @@ function drawVolume(visibleCandles, visibleIndices){
     ctx.fillRect(x - barW / 2, y, barW, y0 - y);
   });
 
-  ctx.fillStyle = '#666'; 
+  ctx.fillStyle = T().label; 
   ctx.textAlign = 'left';
   ctx.fillText(`出来高`, 5, 10);
 }
@@ -2491,6 +2535,7 @@ function drawMacd(visibleIndices){
   const chartW = w - pad.l - pad.r;
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
+  if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
 
   const data = indicators.macd;
   let minV = Infinity, maxV = -Infinity;
@@ -2511,7 +2556,7 @@ function drawMacd(visibleIndices){
   const getY = (v) => pad.t + chartH - (v - minV) * scaleY;
 
   const y0 = getY(0);
-  ctx.strokeStyle = '#ccc'; 
+  ctx.strokeStyle = T().axis; 
   ctx.beginPath(); 
   ctx.moveTo(pad.l, y0); 
   ctx.lineTo(w - pad.r, y0); 
@@ -2547,7 +2592,7 @@ function drawMacd(visibleIndices){
   drawLine(data.macd, '#2196f3');
   drawLine(data.signal, '#ff9800');
 
-  ctx.fillStyle = '#666'; 
+  ctx.fillStyle = T().label; 
   ctx.textAlign = 'left';
   ctx.fillText(`MACD(${params.macdShort},${params.macdLong},${params.macdSignal})`, 5, 10);
 }
@@ -2560,12 +2605,13 @@ function drawStoch(visibleIndices){
   const chartW = w - pad.l - pad.r;
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
+  if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
 
   const data = indicators.stoch;
   const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
   const getY = (v) => pad.t + chartH - (v / 100) * chartH;
 
-  ctx.strokeStyle = '#eee'; 
+  ctx.strokeStyle = T().grid; 
   ctx.setLineDash([4, 4]);
   [20, 80].forEach(level => {
     const y = getY(level);
@@ -2595,7 +2641,7 @@ function drawStoch(visibleIndices){
   drawLine(data.k, '#00bcd4');
   drawLine(data.d, '#ff5722');
 
-  ctx.fillStyle = '#666'; 
+  ctx.fillStyle = T().label; 
   ctx.textAlign = 'left';
   ctx.fillText(`Stoch(${params.stochK},${params.stochD})`, 5, 10);
 }
@@ -2608,6 +2654,7 @@ function drawRsi(visibleIndices){
   const chartW = w - pad.l - pad.r;
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
+  if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
 
   const data = indicators.rsi;
   const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
@@ -2617,7 +2664,7 @@ function drawRsi(visibleIndices){
   const y70 = getY(70), y30 = getY(30);
   ctx.fillRect(pad.l, y70, chartW, y30 - y70);
 
-  ctx.strokeStyle = '#ccc'; 
+  ctx.strokeStyle = T().axis; 
   ctx.setLineDash([4, 4]);
   [30, 70].forEach(level => {
     const y = getY(level);
@@ -2643,7 +2690,7 @@ function drawRsi(visibleIndices){
   });
   ctx.stroke();
 
-  ctx.fillStyle = '#666'; 
+  ctx.fillStyle = T().label; 
   ctx.textAlign = 'left';
   ctx.fillText(`RSI(${params.rsi})`, 5, 10);
 }
@@ -2656,6 +2703,7 @@ function drawAtr(visibleIndices){
   const chartW = w - pad.l - pad.r;
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
+  if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
 
   const data = indicators.atr;
   let minV = Infinity, maxV = -Infinity;
@@ -2678,7 +2726,7 @@ function drawAtr(visibleIndices){
   const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
   const getY = (v) => pad.t + chartH - (v - minV) * scaleY;
 
-  ctx.strokeStyle = '#eee';
+  ctx.strokeStyle = T().grid;
   ctx.lineWidth = 1;
   for(let i = 0; i <= 5; i++){
     const y = pad.t + (chartH * i / 5);
@@ -2687,7 +2735,7 @@ function drawAtr(visibleIndices){
     ctx.moveTo(pad.l, y);
     ctx.lineTo(w - pad.r, y);
     ctx.stroke();
-    ctx.fillStyle = '#666';
+    ctx.fillStyle = T().label;
     ctx.textAlign = 'left';
     ctx.fillText(val.toFixed(2) + '%', w - pad.r + 5, y + 4);
   }
@@ -2707,7 +2755,7 @@ function drawAtr(visibleIndices){
   });
   ctx.stroke();
 
-  ctx.fillStyle = '#666';
+  ctx.fillStyle = T().label;
   ctx.textAlign = 'left';
   ctx.fillText(`ATR%(${params.atr})`, 5, 10);
 }
@@ -2720,6 +2768,7 @@ function drawAdx(visibleIndices){
   const chartW = w - pad.l - pad.r;
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
+  if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
 
   const data = indicators.adx;
   let minV = Infinity, maxV = -Infinity;
@@ -2744,7 +2793,7 @@ function drawAdx(visibleIndices){
   const getY = (v) => pad.t + chartH - (v - minV) * scaleY;
 
   // グリッド線
-  ctx.strokeStyle = '#eee';
+  ctx.strokeStyle = T().grid;
   ctx.lineWidth = 1;
   for(let i = 0; i <= 5; i++){
     const y = pad.t + (chartH * i / 5);
@@ -2753,7 +2802,7 @@ function drawAdx(visibleIndices){
     ctx.moveTo(pad.l, y);
     ctx.lineTo(w - pad.r, y);
     ctx.stroke();
-    ctx.fillStyle = '#666';
+    ctx.fillStyle = T().label;
     ctx.textAlign = 'left';
     ctx.fillText(val.toFixed(1), w - pad.r + 5, y + 4);
   }
@@ -2761,7 +2810,7 @@ function drawAdx(visibleIndices){
   // 25の参照線（ADXの重要ライン）
   if(minV <= 25 && maxV >= 25){
     const y25 = getY(25);
-    ctx.strokeStyle = '#ccc';
+    ctx.strokeStyle = T().axis;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(pad.l, y25);
@@ -2792,7 +2841,7 @@ function drawAdx(visibleIndices){
   drawLine(data.minusDI, '#2196f3', 2);
   drawLine(data.adx, '#f44336', 2.5);
 
-  ctx.fillStyle = '#666';
+  ctx.fillStyle = T().label;
   ctx.textAlign = 'left';
   ctx.fillText(`ADX(${params.adx})`, 5, 10);
   
@@ -2811,7 +2860,7 @@ function drawCrosshair(x){
   const draw = (ctx, h) => {
     if(!ctx) return;
     ctx.save();
-    ctx.strokeStyle = '#999';
+    ctx.strokeStyle = T().neutral;
     ctx.setLineDash([3, 3]);
     ctx.beginPath(); 
     ctx.moveTo(x, 0); 
@@ -3080,6 +3129,7 @@ function setupEventListeners(){
     helpModal.setAttribute('aria-hidden', 'true'); 
   };
   helpBtn.addEventListener('click', openHelp);
+  document.getElementById('colorBtn')?.addEventListener('click', cycleTheme);
   helpCloseBtn.addEventListener('click', closeHelp);
   helpModal.addEventListener('click', (e) => { 
     if(e.target === helpModal) closeHelp(); 
