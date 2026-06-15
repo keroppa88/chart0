@@ -221,29 +221,13 @@
         <span>価格帯別出来高</span>
       </label>
 
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="dateLineCheck">
-        <span>日付ライン</span>
-      </label>
+      <button id="dateLineBtn" class="help-btn" type="button">日付ライン</button>
     </div>
-    
-    <!-- グループ3: 日足、週足、月足、右スペース -->
+
+    <!-- グループ3: 日足/週足/月足ボタン、右スペース -->
     <div class="legend-group">
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="dailyCheck" checked>
-        <span>日足</span>
-      </label>
-      
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="weeklyCheck">
-        <span>週足</span>
-      </label>
-      
-      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-        <input type="checkbox" id="monthlyCheck">
-        <span>月足</span>
-      </label>
-      
+      <button id="timeframeBtn" class="help-btn" type="button">日足</button>
+
       <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
         <input type="checkbox" id="rightSpaceCheck">
         <span>右スペース</span>
@@ -555,7 +539,7 @@ function restoreBackBuffers(){
 
 let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
-let dateLineEnabled = false;
+let dateLineMultiplier = 0; // 0=非表示, 1=通常, 2=2倍, 3=3倍, 4=4倍
 let volumeProfileEnabled = false; // 追加（将来用）
 let showFinancialInfo1 = false; // 騰落: 勝率、＋寄・－寄の日中騰落率
 let showFinancialInfo2 = false; // 財務: PER、PBR、時価総額など（ON時のみ財務CSVを読む）
@@ -2350,7 +2334,7 @@ let displayCompareSeries = [];
   }
 
   // 日付ラベルを最大30個に制限（それ以上は間引く）
-  const maxDateLabels = 26;
+  const maxDateLabels = 26 * (dateLineMultiplier || 1);
   if(datePositions.length > maxDateLabels){
     const newPositions = [];
     const newLabels = [];
@@ -2366,12 +2350,12 @@ let displayCompareSeries = [];
     dateLabels.push(...newLabels);
   }
 
-  if(dateLineEnabled){
+  if(dateLineMultiplier > 0){
     ctx.save();
     ctx.strokeStyle = T().gridStrong;
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
-    
+
     datePositions.forEach(i => {
       const x = getX(i);
       ctx.beginPath();
@@ -3324,10 +3308,16 @@ function setupEventListeners(){
     drawChart();
   });
 
-  document.getElementById('dateLineCheck')?.addEventListener('change', (e) => {
-    dateLineEnabled = e.target.checked;
-    drawChart();
-  });
+  (function(){
+    const btn = document.getElementById('dateLineBtn');
+    if(!btn) return;
+    const labels = ['日付−', '日付', '日付×2', '日付×3', '日付×4'];
+    btn.addEventListener('click', () => {
+      dateLineMultiplier = (dateLineMultiplier + 1) % 5;
+      btn.textContent = labels[dateLineMultiplier];
+      drawChart();
+    });
+  })();
 
   document.getElementById('volumeProfileCheck')?.addEventListener('change', (e) => {
     volumeProfileEnabled = e.target.checked;
@@ -3375,39 +3365,18 @@ function setupEventListeners(){
     }
   });
 
-  const dailyCheck = document.getElementById('dailyCheck');
-  const weeklyCheck = document.getElementById('weeklyCheck');
-  const monthlyCheck = document.getElementById('monthlyCheck');
-
-  dailyCheck?.addEventListener('change', (e) => {
-    if(e.target.checked){
-      weeklyCheck.checked = false;
-      monthlyCheck.checked = false;
-      switchTimeframe('daily');
-    }else{
-      e.target.checked = true;
-    }
-  });
-
-  weeklyCheck?.addEventListener('change', (e) => {
-    if(e.target.checked){
-      dailyCheck.checked = false;
-      monthlyCheck.checked = false;
-      switchTimeframe('weekly');
-    }else{
-      e.target.checked = true;
-    }
-  });
-
-  monthlyCheck?.addEventListener('change', (e) => {
-    if(e.target.checked){
-      dailyCheck.checked = false;
-      weeklyCheck.checked = false;
-      switchTimeframe('monthly');
-    }else{
-      e.target.checked = true;
-    }
-  });
+  (function(){
+    const btn = document.getElementById('timeframeBtn');
+    if(!btn) return;
+    const frames = ['daily', 'weekly', 'monthly'];
+    const frameLabels = { daily:'日足', weekly:'週足', monthly:'月足' };
+    btn.addEventListener('click', () => {
+      const idx = frames.indexOf(timeframe);
+      const next = frames[(idx + 1) % frames.length];
+      switchTimeframe(next);
+      btn.textContent = frameLabels[next];
+    });
+  })();
 
   const inputs = document.querySelectorAll('.param-group input[type="number"]');
   inputs.forEach(inp => {
