@@ -425,10 +425,10 @@ const SCHEME = {
 // 「色」ボタンで循環する全状態 [背景, スキーム]
 const STATES = [
   ['normal','classic'], ['normal','jpRed'], ['normal','jpBlue'], ['normal','mono'], ['normal','minimal'],
+  ['black','jpRed'], ['black','jpBlue'],
   ['gray','jpRed'], ['gray','jpBlue'], ['gray','mono'],
   ['navy','jpRed'], ['navy','jpBlue'], ['navy','mono'],
   ['sepia','jpRed'], ['sepia','jpBlue'], ['sepia','mono'],
-  ['black','jpRed'], ['black','jpBlue'],
 ];
 let stateIndex = 0;
 function T(){ return BG[STATES[stateIndex][0]]; }
