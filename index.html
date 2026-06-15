@@ -424,19 +424,19 @@ const DASH = { solid:[], dash:[6,4], dot:[2,3], dashdot:[9,3,2,3], long:[12,5] }
 const DASHMAP = { ma1:'solid', ma2:'dash', vwap:'dot', keltner:'dashdot', donchian:'long', macd:'solid', signal:'dash', stochK:'solid', stochD:'dash', rsi:'solid', atr:'dash', adx:'solid', plusDI:'dash', minusDI:'dot', volUp:'solid', volDown:'solid' };
 // 配色スキーム
 const SCHEME = {
-  classic: { candle:'fill', up:'#26a69a', down:'#ef5350', palette:'std' },  // 緑↑/赤↓（現状）
-  jpRed:   { candle:'fill', up:'#e53935', down:'#1e88e5', palette:'std' },  // 赤↑/青↓（日本式）
-  jpBlue:  { candle:'fill', up:'#1e88e5', down:'#e53935', palette:'inv' },  // 青↑/赤↓・線逆転
-  mono:    { candle:'mono', palette:'std' },   // 白黒ローソク＋多色線
-  minimal: { candle:'mono', palette:'dash' },  // 印刷用：白黒ローソク＋単色破線
+  classic:  { candle:'fill', up:'#26a69a', down:'#ef5350', palette:'std' },  // 緑↑/赤↓
+  jpRed:    { candle:'fill', up:'#e53935', down:'#1e88e5', palette:'std' },  // 赤↑/青↓
+  redGreen: { candle:'fill', up:'#e53935', down:'#26a69a', palette:'std' },  // 赤↑/緑↓（紺用・青は背景に埋もれるため）
+  mono:     { candle:'mono', palette:'std' },   // 白黒ローソク＋多色線
+  minimal:  { candle:'mono', palette:'dash' },  // 印刷用：白黒ローソク＋単色破線
 };
 // 「色」ボタンで循環する全状態 [背景, スキーム]
 const STATES = [
-  ['normal','classic'], ['normal','jpRed'], ['normal','jpBlue'], ['normal','mono'], ['normal','minimal'],
-  ['black','jpRed'], ['black','jpBlue'],
-  ['gray','jpRed'], ['gray','jpBlue'], ['gray','mono'],
-  ['navy','classic'], ['navy','jpRed'], ['navy','mono'],
-  ['sepia','jpRed'], ['sepia','jpBlue'], ['sepia','mono'],
+  ['normal','classic'], ['normal','jpRed'], ['normal','mono'], ['normal','minimal'],
+  ['black','classic'], ['black','jpRed'],
+  ['gray','classic'], ['gray','jpRed'], ['gray','mono'],
+  ['navy','classic'], ['navy','redGreen'], ['navy','mono'],
+  ['sepia','classic'], ['sepia','jpRed'], ['sepia','mono'],
 ];
 let stateIndex = 0;
 function T(){ return BG[STATES[stateIndex][0]]; }
