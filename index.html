@@ -100,6 +100,9 @@
     body.theme-black .indicator-container { background:#000000; border-color:#333333; }
     body.theme-black .param-group { background:#1a1a1a; border-color:#333333; color:#cccccc; }
     body.theme-black .param-group select, body.theme-black .param-group input, body.theme-black select#compareSymbolSelect { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
+    /* 暗い背景テーマでは表示本数・各ラベルの濃いグレー文字を白文字に */
+    body.theme-gray .view-info, body.theme-navy .view-info, body.theme-black .view-info,
+    body.theme-gray .param-group label, body.theme-navy .param-group label, body.theme-black .param-group label { color:#ffffff; }
     /* 属性・銘柄・比較銘柄の選択欄は背景テーマに関わらず常に白地・黒文字 */
     #modeSelect, #symbolSelect, #compareSymbolSelect,
     #modeSelect option, #symbolSelect option, #compareSymbolSelect option {
