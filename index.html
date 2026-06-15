@@ -72,24 +72,34 @@
 
     .tooltip { position:absolute; background:rgba(255,255,255,0.95); border:1px solid #999; padding:8px; border-radius:4px; font-size:12px; pointer-events:none; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:100; line-height:1.4; white-space:nowrap; }
 
-    /* === 配色テーマ: 黒 === */
-    body.theme-dark { background:#141414; color:#cccccc; }
-    body.theme-dark .container { background:#000000; box-shadow:none; }
-    body.theme-dark #mainChart { border-color:#333333; }
-    body.theme-dark .indicator-container { background:#000000; border-color:#333333; }
-    body.theme-dark .param-group { background:#1e1e1e; border-color:#333333; color:#cccccc; }
-    body.theme-dark .param-group select { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
-    body.theme-dark .param-group input { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
-    body.theme-dark select#compareSymbolSelect { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
+    /* === 配色テーマ: グレー === */
+    body.theme-gray { background:#141414; color:#cccccc; }
+    body.theme-gray .container { background:#1e1e1e; box-shadow:none; }
+    body.theme-gray #mainChart { border-color:#3a3a3a; }
+    body.theme-gray .indicator-container { background:#1e1e1e; border-color:#3a3a3a; }
+    body.theme-gray .param-group { background:#2a2a2a; border-color:#3a3a3a; color:#cccccc; }
+    body.theme-gray .param-group select, body.theme-gray .param-group input, body.theme-gray select#compareSymbolSelect { background:#333333; color:#eeeeee; border-color:#4a4a4a; }
     /* === 配色テーマ: 紺 === */
     body.theme-navy { background:#08142e; color:#cdd8ef; }
     body.theme-navy .container { background:#0d1b3a; box-shadow:none; }
     body.theme-navy #mainChart { border-color:#24376b; }
     body.theme-navy .indicator-container { background:#0d1b3a; border-color:#24376b; }
     body.theme-navy .param-group { background:#13244f; border-color:#24376b; color:#cdd8ef; }
-    body.theme-navy .param-group select { background:#16294f; color:#e3ebfb; border-color:#2c4274; }
-    body.theme-navy .param-group input { background:#16294f; color:#e3ebfb; border-color:#2c4274; }
-    body.theme-navy select#compareSymbolSelect { background:#16294f; color:#e3ebfb; border-color:#2c4274; }
+    body.theme-navy .param-group select, body.theme-navy .param-group input, body.theme-navy select#compareSymbolSelect { background:#16294f; color:#e3ebfb; border-color:#2c4274; }
+    /* === 配色テーマ: セピア === */
+    body.theme-sepia { background:#e9dec2; color:#5a4f3a; }
+    body.theme-sepia .container { background:#f4ecd8; box-shadow:none; }
+    body.theme-sepia #mainChart { border-color:#cbbd9b; }
+    body.theme-sepia .indicator-container { background:#f4ecd8; border-color:#cbbd9b; }
+    body.theme-sepia .param-group { background:#ece0c4; border-color:#cbbd9b; color:#5a4f3a; }
+    body.theme-sepia .param-group select, body.theme-sepia .param-group input, body.theme-sepia select#compareSymbolSelect { background:#f4ecd8; color:#3a3026; border-color:#cbbd9b; }
+    /* === 配色テーマ: 黒 === */
+    body.theme-black { background:#0a0a0a; color:#cccccc; }
+    body.theme-black .container { background:#000000; box-shadow:none; }
+    body.theme-black #mainChart { border-color:#333333; }
+    body.theme-black .indicator-container { background:#000000; border-color:#333333; }
+    body.theme-black .param-group { background:#1a1a1a; border-color:#333333; color:#cccccc; }
+    body.theme-black .param-group select, body.theme-black .param-group input, body.theme-black select#compareSymbolSelect { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
   </style>
 </head>
 <body>
@@ -389,24 +399,57 @@
 
 <script>
 
-// === 配色テーマ（背景: 通常→黒→紺 を循環） ===
-const THEMES = {
-  normal: { canvasBg:null,      grid:'#eee',     gridStrong:'#e0e0e0', axis:'#ccc',    neutral:'#999',    label:'#666',    name:'#acacac', nameFaint:'rgba(172,172,172,0.4)', donchian:'#000',    volProfile:'#E0EBEB' },
-  dark:   { canvasBg:'#000000', grid:'#222222', gridStrong:'#2b2b2b', axis:'#3a3a3a', neutral:'#888888', label:'#9a9a9a', name:'#8a8a8a', nameFaint:'rgba(140,140,140,0.4)', donchian:'#d0d0d0', volProfile:'rgba(110,130,130,0.35)' },
-  navy:   { canvasBg:'#0d1b3a', grid:'#16264d', gridStrong:'#1d2f5c', axis:'#27396b', neutral:'#7184b3', label:'#9fb0d8', name:'#8294c0', nameFaint:'rgba(130,148,192,0.4)', donchian:'#d6e0f5', volProfile:'rgba(80,110,170,0.30)' },
+// === 配色システム: 背景(5種) × 配色スキーム を「色」ボタンで循環 ===
+// 背景テーマ（構造色 + 単色インク + 白黒ローソクの抜き色）
+const BG = {
+  normal: { canvasBg:null,      grid:'#eee',     gridStrong:'#e0e0e0', axis:'#ccc',    neutral:'#999',    label:'#666',    name:'#acacac', nameFaint:'rgba(172,172,172,0.4)', donchian:'#000',    volProfile:'#E0EBEB',             ink:'#222222', hollowFill:'#ffffff' },
+  gray:   { canvasBg:'#1e1e1e', grid:'#333333', gridStrong:'#3a3a3a', axis:'#454545', neutral:'#8a8a8a', label:'#a8a8a8', name:'#9a9a9a', nameFaint:'rgba(160,160,160,0.4)', donchian:'#d8d8d8', volProfile:'rgba(120,135,135,0.30)', ink:'#e0e0e0', hollowFill:'#1e1e1e' },
+  navy:   { canvasBg:'#0d1b3a', grid:'#16264d', gridStrong:'#1d2f5c', axis:'#27396b', neutral:'#7184b3', label:'#9fb0d8', name:'#8294c0', nameFaint:'rgba(130,148,192,0.4)', donchian:'#d6e0f5', volProfile:'rgba(80,110,170,0.30)',  ink:'#dce4f5', hollowFill:'#0d1b3a' },
+  sepia:  { canvasBg:'#f4ecd8', grid:'#e3d9bf', gridStrong:'#dcd0b0', axis:'#cbbd9b', neutral:'#a8997a', label:'#7a6f56', name:'#b3a684', nameFaint:'rgba(150,135,100,0.4)', donchian:'#4a3f2a', volProfile:'rgba(180,160,120,0.30)', ink:'#3a3026', hollowFill:'#f4ecd8' },
+  black:  { canvasBg:'#000000', grid:'#222222', gridStrong:'#2b2b2b', axis:'#3a3a3a', neutral:'#888888', label:'#9a9a9a', name:'#8a8a8a', nameFaint:'rgba(140,140,140,0.4)', donchian:'#d0d0d0', volProfile:'rgba(110,130,130,0.35)', ink:'#e8e8e8', hollowFill:'#000000' },
 };
-const THEME_ORDER = ['normal', 'dark', 'navy'];
-let themeIndex = 0;
-function T(){ return THEMES[THEME_ORDER[themeIndex]]; }
+// 線パレット（標準=多色 / 逆転=寒暖入替）
+const LINES_STD = { ma1:'#ff9800', ma2:'#2196f3', vwap:'#9c27b0', keltner:'#ff0000', macd:'#2196f3', signal:'#ff9800', stochK:'#00bcd4', stochD:'#ff5722', rsi:'#9c27b0', atr:'#e91e63', adx:'#f44336', plusDI:'#4caf50', minusDI:'#2196f3', volUp:'#26a69a', volDown:'#ef5350' };
+const LINES_INV = { ma1:'#2196f3', ma2:'#ff9800', vwap:'#00bcd4', keltner:'#3f51b5', macd:'#ff9800', signal:'#2196f3', stochK:'#ff5722', stochD:'#00bcd4', rsi:'#00897b', atr:'#5c6bc0', adx:'#3f51b5', plusDI:'#26a69a', minusDI:'#ffa726', volUp:'#5c6bc0', volDown:'#ffa726' };
+// 印刷用ミニマル: 全線インク単色、線種(破線)で区別
+const DASH = { solid:[], dash:[6,4], dot:[2,3], dashdot:[9,3,2,3], long:[12,5] };
+const DASHMAP = { ma1:'solid', ma2:'dash', vwap:'dot', keltner:'dashdot', donchian:'long', macd:'solid', signal:'dash', stochK:'solid', stochD:'dash', rsi:'solid', atr:'dash', adx:'solid', plusDI:'dash', minusDI:'dot', volUp:'solid', volDown:'solid' };
+// 配色スキーム
+const SCHEME = {
+  classic: { candle:'fill', up:'#26a69a', down:'#ef5350', palette:'std' },  // 緑↑/赤↓（現状）
+  jpRed:   { candle:'fill', up:'#e53935', down:'#1e88e5', palette:'std' },  // 赤↑/青↓（日本式）
+  jpBlue:  { candle:'fill', up:'#1e88e5', down:'#e53935', palette:'inv' },  // 青↑/赤↓・線逆転
+  mono:    { candle:'mono', palette:'std' },   // 白黒ローソク＋多色線
+  minimal: { candle:'mono', palette:'dash' },  // 印刷用：白黒ローソク＋単色破線
+};
+// 「色」ボタンで循環する全状態 [背景, スキーム]
+const STATES = [
+  ['normal','classic'], ['normal','jpRed'], ['normal','jpBlue'], ['normal','mono'], ['normal','minimal'],
+  ['gray','jpRed'], ['gray','jpBlue'], ['gray','mono'],
+  ['navy','jpRed'], ['navy','jpBlue'], ['navy','mono'],
+  ['sepia','jpRed'], ['sepia','jpBlue'], ['sepia','mono'],
+  ['black','jpRed'], ['black','jpBlue'],
+];
+let stateIndex = 0;
+function T(){ return BG[STATES[stateIndex][0]]; }
+function SC(){ return SCHEME[STATES[stateIndex][1]]; }
+function LP(key){
+  const sc = SC();
+  if(sc.palette === 'dash'){
+    return { color: T().ink, dash: DASH[DASHMAP[key] || 'solid'] };
+  }
+  if(key === 'donchian') return { color: T().donchian, dash: null };
+  const pal = sc.palette === 'inv' ? LINES_INV : LINES_STD;
+  return { color: pal[key] || T().neutral, dash: null };
+}
 function applyTheme(){
-  const name = THEME_ORDER[themeIndex];
-  document.body.classList.remove('theme-dark', 'theme-navy');
-  if(name === 'dark') document.body.classList.add('theme-dark');
-  else if(name === 'navy') document.body.classList.add('theme-navy');
+  const bg = STATES[stateIndex][0];
+  document.body.classList.remove('theme-gray', 'theme-navy', 'theme-sepia', 'theme-black');
+  if(bg !== 'normal') document.body.classList.add('theme-' + bg);
   if(typeof drawChart === 'function') drawChart();
 }
 function cycleTheme(){
-  themeIndex = (themeIndex + 1) % THEME_ORDER.length;
+  stateIndex = (stateIndex + 1) % STATES.length;
   applyTheme();
 }
 
@@ -1824,6 +1867,7 @@ function drawMain(visibleCandles, visibleIndices){
 
   ctx.clearRect(0, 0, w, h);
   if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
+  ctx.setLineDash([]);
 
   if(currentSymbolDisplay){
     ctx.save();
@@ -2418,28 +2462,43 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
     const yC = getY(c.close);
 
     const up = c.close >= c.open;
-    const col = up ? '#26a69a' : '#ef5350';
-
-    ctx.strokeStyle = col;
-    ctx.beginPath();
-    ctx.moveTo(x, yH);
-    ctx.lineTo(x, yL);
-    ctx.stroke();
-
     const top = Math.min(yO, yC);
     const bot = Math.max(yO, yC);
     const height = Math.max(1, bot - top);
+    const sc = SC();
 
-    ctx.fillStyle = col;
-    ctx.fillRect(x - bodyW / 2, top, bodyW, height);
+    if(sc.candle === 'mono'){
+      // 白黒ローソク（陽線=抜き / 陰線=塗り、インク色は背景に追従）
+      const ink = T().ink;
+      ctx.strokeStyle = ink;
+      ctx.beginPath();
+      ctx.moveTo(x, yH);
+      ctx.lineTo(x, yL);
+      ctx.stroke();
 
-    ctx.strokeStyle = col;
-    ctx.strokeRect(x - bodyW / 2, top, bodyW, height);
+      ctx.fillStyle = up ? T().hollowFill : ink;
+      ctx.fillRect(x - bodyW / 2, top, bodyW, height);
+      ctx.strokeStyle = ink;
+      ctx.strokeRect(x - bodyW / 2, top, bodyW, height);
+    }else{
+      const col = up ? sc.up : sc.down;
+      ctx.strokeStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(x, yH);
+      ctx.lineTo(x, yL);
+      ctx.stroke();
+
+      ctx.fillStyle = col;
+      ctx.fillRect(x - bodyW / 2, top, bodyW, height);
+      ctx.strokeStyle = col;
+      ctx.strokeRect(x - bodyW / 2, top, bodyW, height);
+    }
   });
 
-  const drawLine = (arr, color, width = 1.5) => {
+  const drawLine = (arr, color, width = 1.5, dash = null) => {
     ctx.strokeStyle = color; 
     ctx.lineWidth = width;
+    ctx.setLineDash(dash || []);
     ctx.beginPath();
     let m = false;
     visibleIndices.forEach((sIdx, i) => {
@@ -2454,31 +2513,32 @@ if(volumeProfileEnabled && !compareEnabled && !compareSymbolCode){
       }
     });
     ctx.stroke();
+    ctx.setLineDash([]);
   };
   
   if(!compareEnabled || !compareSymbolCode){
     if(params.ma1 > 0){
-      drawLine(indicators.ma1, '#ff9800');
+      drawLine(indicators.ma1, LP('ma1').color, 1.5, LP('ma1').dash);
     }
     if(params.ma2 > 0){
-      drawLine(indicators.ma2, '#2196f3');
+      drawLine(indicators.ma2, LP('ma2').color, 1.5, LP('ma2').dash);
     }
     
     // VWAP描画追加
     if(params.vwap > 0){
-      drawLine(indicators.vwap, '#9c27b0');
+      drawLine(indicators.vwap, LP('vwap').color, 1.5, LP('vwap').dash);
     }
 
     if(params.dochianEnabled && params.dochian > 0){
-      drawLine(indicators.dochian.high, T().donchian, 0.8);
-      drawLine(indicators.dochian.low, T().donchian, 0.8);
-      drawLine(indicators.dochian.mid, T().donchian, 0.8);
+      drawLine(indicators.dochian.high, LP('donchian').color, 0.8, LP('donchian').dash);
+      drawLine(indicators.dochian.low, LP('donchian').color, 0.8, LP('donchian').dash);
+      drawLine(indicators.dochian.mid, LP('donchian').color, 0.8, LP('donchian').dash);
     }
 
     if(params.keltnerEnabled && params.keltner > 0){
-      drawLine(indicators.keltner.upper, '#ff0000', 0.8);
-      drawLine(indicators.keltner.lower, '#ff0000', 0.8);
-      drawLine(indicators.keltner.middle, '#ff0000', 0.8);
+      drawLine(indicators.keltner.upper, LP('keltner').color, 0.8, LP('keltner').dash);
+      drawLine(indicators.keltner.lower, LP('keltner').color, 0.8, LP('keltner').dash);
+      drawLine(indicators.keltner.middle, LP('keltner').color, 0.8, LP('keltner').dash);
     }
   }
 }
@@ -2492,6 +2552,7 @@ function drawVolume(visibleCandles, visibleIndices){
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
   if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
+  ctx.setLineDash([]);
 
   let maxVol = 0;
   visibleCandles.forEach(c => {
@@ -2515,7 +2576,7 @@ function drawVolume(visibleCandles, visibleIndices){
 
     let color = T().neutral;
     if(c.open != null && c.close != null){
-      color = c.close >= c.open ? '#26a69a' : '#ef5350';
+      color = (c.close >= c.open ? LP('volUp') : LP('volDown')).color;
     }
 
     ctx.fillStyle = color;
@@ -2536,6 +2597,7 @@ function drawMacd(visibleIndices){
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
   if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
+  ctx.setLineDash([]);
 
   const data = indicators.macd;
   let minV = Infinity, maxV = -Infinity;
@@ -2568,14 +2630,15 @@ function drawMacd(visibleIndices){
     const v = data.hist[sIdx];
     if(v != null){
       const x = getX(i), y = getY(v);
-      ctx.fillStyle = v >= 0 ? '#26a69a' : '#ef5350';
+      ctx.fillStyle = (v >= 0 ? LP('volUp') : LP('volDown')).color;
       ctx.fillRect(x - barW / 2, Math.min(y, y0), barW, Math.abs(y - y0));
     }
   });
 
-  const drawLine = (arr, color) => {
+  const drawLine = (arr, color, dash = null) => {
     ctx.strokeStyle = color; 
     ctx.lineWidth = 1.5;
+    ctx.setLineDash(dash || []);
     ctx.beginPath();
     let m = false;
     visibleIndices.forEach((sIdx, i) => {
@@ -2588,9 +2651,10 @@ function drawMacd(visibleIndices){
       }else m = false;
     });
     ctx.stroke();
+    ctx.setLineDash([]);
   };
-  drawLine(data.macd, '#2196f3');
-  drawLine(data.signal, '#ff9800');
+  drawLine(data.macd, LP('macd').color, LP('macd').dash);
+  drawLine(data.signal, LP('signal').color, LP('signal').dash);
 
   ctx.fillStyle = T().label; 
   ctx.textAlign = 'left';
@@ -2606,6 +2670,7 @@ function drawStoch(visibleIndices){
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
   if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
+  ctx.setLineDash([]);
 
   const data = indicators.stoch;
   const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
@@ -2622,9 +2687,10 @@ function drawStoch(visibleIndices){
   });
   ctx.setLineDash([]);
 
-  const drawLine = (arr, color) => {
+  const drawLine = (arr, color, dash = null) => {
     ctx.strokeStyle = color; 
     ctx.lineWidth = 1.5;
+    ctx.setLineDash(dash || []);
     ctx.beginPath();
     let m = false;
     visibleIndices.forEach((sIdx, i) => {
@@ -2637,9 +2703,10 @@ function drawStoch(visibleIndices){
       }else m = false;
     });
     ctx.stroke();
+    ctx.setLineDash([]);
   };
-  drawLine(data.k, '#00bcd4');
-  drawLine(data.d, '#ff5722');
+  drawLine(data.k, LP('stochK').color, LP('stochK').dash);
+  drawLine(data.d, LP('stochD').color, LP('stochD').dash);
 
   ctx.fillStyle = T().label; 
   ctx.textAlign = 'left';
@@ -2655,6 +2722,7 @@ function drawRsi(visibleIndices){
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
   if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
+  ctx.setLineDash([]);
 
   const data = indicators.rsi;
   const getX = (i) => pad.l + (i + 0.5) * (chartW / visibleIndices.length);
@@ -2675,8 +2743,9 @@ function drawRsi(visibleIndices){
   });
   ctx.setLineDash([]);
 
-  ctx.strokeStyle = '#9c27b0'; 
+  ctx.strokeStyle = LP('rsi').color; 
   ctx.lineWidth = 1.5;
+  ctx.setLineDash(LP('rsi').dash || []);
   ctx.beginPath();
   let m = false;
   visibleIndices.forEach((sIdx, i) => {
@@ -2704,6 +2773,7 @@ function drawAtr(visibleIndices){
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
   if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
+  ctx.setLineDash([]);
 
   const data = indicators.atr;
   let minV = Infinity, maxV = -Infinity;
@@ -2740,8 +2810,9 @@ function drawAtr(visibleIndices){
     ctx.fillText(val.toFixed(2) + '%', w - pad.r + 5, y + 4);
   }
 
-  ctx.strokeStyle = '#e91e63';
+  ctx.strokeStyle = LP('atr').color;
   ctx.lineWidth = 1.5;
+  ctx.setLineDash(LP('atr').dash || []);
   ctx.beginPath();
   let m = false;
   visibleIndices.forEach((sIdx, i) => {
@@ -2769,6 +2840,7 @@ function drawAdx(visibleIndices){
   const chartH = h - pad.t - pad.b;
   ctx.clearRect(0, 0, w, h);
   if(T().canvasBg){ ctx.fillStyle = T().canvasBg; ctx.fillRect(0, 0, w, h); }
+  ctx.setLineDash([]);
 
   const data = indicators.adx;
   let minV = Infinity, maxV = -Infinity;
@@ -2819,9 +2891,10 @@ function drawAdx(visibleIndices){
     ctx.setLineDash([]);
   }
 
-  const drawLine = (arr, color, lineWidth = 1.5) => {
+  const drawLine = (arr, color, lineWidth = 1.5, dash = null) => {
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
+    ctx.setLineDash(dash || []);
     ctx.beginPath();
     let m = false;
     visibleIndices.forEach((sIdx, i) => {
@@ -2834,23 +2907,24 @@ function drawAdx(visibleIndices){
       }else m = false;
     });
     ctx.stroke();
+    ctx.setLineDash([]);
   };
 
   // +DI (緑), -DI (青), ADX (赤・太い)
-  drawLine(data.plusDI, '#4caf50', 2);
-  drawLine(data.minusDI, '#2196f3', 2);
-  drawLine(data.adx, '#f44336', 2.5);
+  drawLine(data.plusDI, LP('plusDI').color, 2, LP('plusDI').dash);
+  drawLine(data.minusDI, LP('minusDI').color, 2, LP('minusDI').dash);
+  drawLine(data.adx, LP('adx').color, 2.5, LP('adx').dash);
 
   ctx.fillStyle = T().label;
   ctx.textAlign = 'left';
   ctx.fillText(`ADX(${params.adx})`, 5, 10);
   
   // 凡例
-  ctx.fillStyle = '#4caf50';
+  ctx.fillStyle = LP('plusDI').color;
   ctx.fillText('+DI', 80, 10);
-  ctx.fillStyle = '#2196f3';
+  ctx.fillStyle = LP('minusDI').color;
   ctx.fillText('-DI', 120, 10);
-  ctx.fillStyle = '#f44336';
+  ctx.fillStyle = LP('adx').color;
   ctx.fillText('ADX', 160, 10);
 }
 
