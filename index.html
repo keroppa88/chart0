@@ -221,7 +221,7 @@
         <span>価格帯別出来高</span>
       </label>
 
-      <button id="dateLineBtn" class="help-btn" type="button">日付ライン</button>
+      <button id="dateLineBtn" class="help-btn" type="button" style="width:64px; text-align:center;">日付×1</button>
     </div>
 
     <!-- グループ3: 日足/週足/月足ボタン、右スペース -->
@@ -539,7 +539,7 @@ function restoreBackBuffers(){
 
 let currentSymbolDisplay = "";
 let rightSpaceEnabled = false;
-let dateLineMultiplier = 0; // 0=非表示, 1=通常, 2=2倍, 3=3倍, 4=4倍
+let dateLineMultiplier = 1; // 0=非表示, 1=通常, 2=2倍, 3=3倍, 4=4倍
 let volumeProfileEnabled = false; // 追加（将来用）
 let showFinancialInfo1 = false; // 騰落: 勝率、＋寄・－寄の日中騰落率
 let showFinancialInfo2 = false; // 財務: PER、PBR、時価総額など（ON時のみ財務CSVを読む）
@@ -3327,7 +3327,7 @@ function setupEventListeners(){
   (function(){
     const btn = document.getElementById('dateLineBtn');
     if(!btn) return;
-    const labels = ['日付−', '日付', '日付×2', '日付×3', '日付×4'];
+    const labels = ['日付×0', '日付×1', '日付×2', '日付×3', '日付×4'];
     btn.addEventListener('click', () => {
       dateLineMultiplier = (dateLineMultiplier + 1) % 5;
       btn.textContent = labels[dateLineMultiplier];
