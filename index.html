@@ -2334,7 +2334,7 @@ let displayCompareSeries = [];
   }
 
   // 日付ラベルを最大30個に制限（それ以上は間引く）
-  const maxDateLabels = 26 * (dateLineMultiplier || 1);
+  const maxDateLabels = 26;
   if(datePositions.length > maxDateLabels){
     const newPositions = [];
     const newLabels = [];
@@ -2351,12 +2351,28 @@ let displayCompareSeries = [];
   }
 
   if(dateLineMultiplier > 0){
+    // ベースの日付ラベル位置を倍率に応じて細分化して縦線を描画
+    // ×1=ラベル位置そのまま、×2=各区間に1本追加、×3=2本…
+    let linePositions = datePositions.slice();
+    if(dateLineMultiplier >= 2 && datePositions.length >= 2){
+      linePositions = [];
+      for(let k = 0; k < datePositions.length - 1; k++){
+        const a = datePositions[k];
+        const b = datePositions[k + 1];
+        linePositions.push(a);
+        for(let m = 1; m < dateLineMultiplier; m++){
+          linePositions.push(Math.round(a + (b - a) * m / dateLineMultiplier));
+        }
+      }
+      linePositions.push(datePositions[datePositions.length - 1]);
+    }
+
     ctx.save();
     ctx.strokeStyle = T().gridStrong;
     ctx.lineWidth = 1;
     ctx.setLineDash([]);
 
-    datePositions.forEach(i => {
+    linePositions.forEach(i => {
       const x = getX(i);
       ctx.beginPath();
       ctx.moveTo(x, pad.t);
