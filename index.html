@@ -72,13 +72,6 @@
 
     .tooltip { position:absolute; background:rgba(255,255,255,0.95); border:1px solid #999; padding:8px; border-radius:4px; font-size:12px; pointer-events:none; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:100; line-height:1.4; white-space:nowrap; }
 
-    /* === 配色テーマ: グレー === */
-    body.theme-gray { background:#2c2c2c; color:#dddddd; }
-    body.theme-gray .container { background:#3a3a3a; box-shadow:none; }
-    body.theme-gray #mainChart { border-color:#5a5a5a; }
-    body.theme-gray .indicator-container { background:#3a3a3a; border-color:#5a5a5a; }
-    body.theme-gray .param-group { background:#4a4a4a; border-color:#5a5a5a; color:#e2e2e2; }
-    body.theme-gray .param-group select, body.theme-gray .param-group input, body.theme-gray select#compareSymbolSelect { background:#555555; color:#f2f2f2; border-color:#6a6a6a; }
     /* === 配色テーマ: 紺 === */
     body.theme-navy { background:#08142e; color:#cdd8ef; }
     body.theme-navy .container { background:#0d1b3a; box-shadow:none; }
@@ -101,9 +94,9 @@
     body.theme-black .param-group { background:#1a1a1a; border-color:#333333; color:#cccccc; }
     body.theme-black .param-group select, body.theme-black .param-group input, body.theme-black select#compareSymbolSelect { background:#2a2a2a; color:#eeeeee; border-color:#444444; }
     /* 暗い背景テーマでは表示本数・各ラベルの濃いグレー文字を白文字に */
-    body.theme-gray .view-info, body.theme-navy .view-info, body.theme-black .view-info,
-    body.theme-gray .param-group label, body.theme-navy .param-group label, body.theme-black .param-group label { color:#ffffff; }
-    body.theme-gray h1, body.theme-navy h1, body.theme-black h1 { color:#f0f0f0; }
+    body.theme-navy .view-info, body.theme-black .view-info,
+    body.theme-navy .param-group label, body.theme-black .param-group label { color:#ffffff; }
+    body.theme-navy h1, body.theme-black h1 { color:#f0f0f0; }
     /* 属性・銘柄・比較銘柄の選択欄は背景テーマに関わらず常に白地・黒文字 */
     #modeSelect, #symbolSelect, #compareSymbolSelect,
     #modeSelect option, #symbolSelect option, #compareSymbolSelect option {
@@ -396,7 +389,6 @@
 // 背景テーマ（構造色 + 単色インク + 白黒ローソクの抜き色）
 const BG = {
   normal: { canvasBg:null,      grid:'#eee',     gridStrong:'#e0e0e0', axis:'#ccc',    neutral:'#999',    label:'#666',    name:'#acacac', nameFaint:'rgba(172,172,172,0.4)', donchian:'#000',    volProfile:'#E0EBEB',             ink:'#222222', hollowFill:'#ffffff' },
-  gray:   { canvasBg:'#3a3a3a', grid:'#4a4a4a', gridStrong:'#525252', axis:'#5a5a5a', neutral:'#9a9a9a', label:'#b8b8b8', name:'#a8a8a8', nameFaint:'rgba(180,180,180,0.4)', donchian:'#e8e8e8', volProfile:'rgba(155,165,165,0.30)', ink:'#ececec', hollowFill:'#3a3a3a' },
   navy:   { canvasBg:'#0d1b3a', grid:'#16264d', gridStrong:'#1d2f5c', axis:'#27396b', neutral:'#7184b3', label:'#9fb0d8', name:'#8294c0', nameFaint:'rgba(130,148,192,0.4)', donchian:'#d6e0f5', volProfile:'rgba(80,110,170,0.30)',  ink:'#dce4f5', hollowFill:'#0d1b3a' },
   sepia:  { canvasBg:'#f4ecd8', grid:'#e3d9bf', gridStrong:'#dcd0b0', axis:'#cbbd9b', neutral:'#a8997a', label:'#7a6f56', name:'#b3a684', nameFaint:'rgba(150,135,100,0.4)', donchian:'#4a3f2a', volProfile:'rgba(180,160,120,0.30)', ink:'#3a3026', hollowFill:'#f4ecd8' },
   black:  { canvasBg:'#000000', grid:'#222222', gridStrong:'#2b2b2b', axis:'#3a3a3a', neutral:'#888888', label:'#9a9a9a', name:'#8a8a8a', nameFaint:'rgba(140,140,140,0.4)', donchian:'#d0d0d0', volProfile:'rgba(110,130,130,0.35)', ink:'#e8e8e8', hollowFill:'#000000' },
@@ -419,7 +411,6 @@ const SCHEME = {
 const STATES = [
   ['normal','classic'], ['normal','jpRed'], ['normal','mono'], ['normal','minimal'],
   ['black','classic'], ['black','jpRed'],
-  ['gray','classic'], ['gray','jpRed'], ['gray','mono'],
   ['navy','classic'], ['navy','redGreen'], ['navy','mono'],
   ['sepia','classic'], ['sepia','jpRed'], ['sepia','mono'],
 ];
@@ -437,7 +428,7 @@ function LP(key){
 }
 function applyTheme(){
   const bg = STATES[stateIndex][0];
-  document.body.classList.remove('theme-gray', 'theme-navy', 'theme-sepia', 'theme-black');
+  document.body.classList.remove('theme-navy', 'theme-sepia', 'theme-black');
   if(bg !== 'normal') document.body.classList.add('theme-' + bg);
   if(typeof drawChart === 'function') drawChart();
 }
