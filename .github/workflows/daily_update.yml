@@ -1,10 +1,5 @@
 name: Daily Update
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/daily_update.yml'
   schedule:
     - cron: '40 7 * * 1-5' # 日本時間16:40（UTC 7:40）
   workflow_dispatch:
