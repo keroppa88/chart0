@@ -1,0 +1,36 @@
+name: Collect Japan Markets
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [scheduled-collect-jp]
+permissions:
+  contents: write
+concurrency:
+  group: chart0-data-writer
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install browser
+        working-directory: collector
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Collect, format, and update chart CSVs
+        run: xvfb-run -a node collector/run.cjs jp
+      - name: Save data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add collector/data data
+          if ! git diff --cached --quiet; then
+            git commit -m "Collect jp market data"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi

@@ -1,5 +1,7 @@
 name: Daily Update
 on:
+  repository_dispatch:
+    types: [scheduled-chart0-daily]
   schedule:
     - cron: '40 7 * * 1-5' # 日本時間16:40（UTC 7:40）
   workflow_dispatch:
@@ -10,8 +12,12 @@ on:
         default: '5'
 permissions:
   contents: write
+concurrency:
+  group: chart0-data-writer
+  cancel-in-progress: false
 jobs:
   build:
+    if: github.event_name != 'schedule' || vars.CLOUDFLARE_SCHEDULE != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
