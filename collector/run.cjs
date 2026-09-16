@@ -351,18 +351,39 @@ const maps = {
 const kind = process.argv[2];
 if (!sets[kind]) throw new Error("Use jp or usa");
 process.chdir(__dirname);
+const errors = [];
+const wait = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+function run(file) {
+  const result = spawnSync(process.execPath, [file], {stdio: "inherit"});
+  return !result.error && result.status === 0;
+}
 for (const phase of ["get", "make"]) {
-  const errors = [];
   for (const file of sets[kind][phase]) {
-    console.log("Running", file);
-    const result = spawnSync(process.execPath, [file], {stdio:"inherit"});
-    if (result.error || result.status !== 0) errors.push(file);
+    let ok = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      console.log("Running", file, "attempt", attempt, "/ 3");
+      if (run(file)) { ok = true; break; }
+      if (attempt < 3) {
+        wait(10000 * attempt);
+        // A second parse of identical input cannot recover a missing quote time.
+        if (file === "make_nikkeijikoku.js") run("get_nikkei225.js");
+      }
+    }
+    if (!ok) {
+      errors.push(file);
+      console.error("::warning::Failed after 3 attempts: " + file);
+    }
   }
-  if (errors.length) throw new Error(phase + " failed: " + errors.join(", "));
 }
 for (const [source, target] of maps[kind]) {
   const from = path.join(__dirname, "data/pricedata", source);
-  if (!fs.existsSync(from)) throw new Error("Missing CSV: " + source);
+  if (!fs.existsSync(from)) {
+    errors.push("Missing CSV: " + source);
+    continue;
+  }
   fs.copyFileSync(from, path.join(__dirname, "../data", target));
 }
 fs.writeFileSync(path.join(__dirname, "../data/version.txt"), String(Date.now()));
+// Keep successful data savable; the workflow reports partial failure AFTER saving.
+fs.writeFileSync(path.join(__dirname, "../collector-result.json"), JSON.stringify({errors}));
+if (errors.length) console.error("::warning::Partial collection; successful data will be saved: " + errors.join(", "));
