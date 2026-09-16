@@ -51,8 +51,8 @@ function getLastDate(filePath) {
     const row = lines.find(s => s.startsWith(prefix + '\t') || s.startsWith(prefix + ' '));
     if (!row) return null;
     // 終値が高値・安値の場合、時刻欄は「*大引」になる。
-    if (/[*＊]?大引\s*$/.test(row)) return '15:30';
-    const m = row.match(/(\d{1,2}:\d{2})\s*$/);
+    if (/[（(]?[*＊]?大引[）)]?\s*$/.test(row)) return '15:30';
+    const m = row.match(/[（(]?(\d{1,2}:\d{2})[）)]?\s*$/);
     return m ? m[1] : null;
   }
 
