@@ -28,3 +28,6 @@ jobs:
         run: xvfb-run -a node collector/run.cjs usa
       - name: Save data
         run: bash collector/save-data.sh usa
+      - name: Report incomplete collection
+        run: |
+          node -e 'const r=require("./collector-result.json"); if(r.errors.length) { console.error(r.errors.join("\n")); process.exit(1); }'
